@@ -84,6 +84,73 @@ ID→nom d'arme/objet — à construire par corrélation (débloquer une arme
 connue, repérer quel index du tableau passe de 0 à 1/2) ou en cherchant
 si la source ou une autre référence communautaire la publie.
 
+### Emblèmes obtenus "à vie" (persistance retrouvée sans MGS4SYS.SAV)
+
+L'utilisateur a fait remarquer à juste titre qu'une simple évaluation des
+prédicats sur les stats de la partie **en cours** ne suffit pas : un
+emblème obtenu lors d'une partie précédente doit continuer à s'afficher
+comme obtenu même si la run actuelle ne le mériterait plus (ex: PIGEON,
+0 kill, obtenu une fois puis on rejoue en tuant tout le monde).
+
+Même la source externe (zexk/bbtracker) liste ça comme question ouverte
+non résolue ("whether emblem predicates run only at results or maintain
+cached state") — pas de réponse toute faite disponible.
+
+**Solution trouvée sans avoir besoin de casser `MGS4SYS.SAV`** : chaque
+slot de sauvegarde garde en mémoire les stats *au moment où cette partie a
+été jouée*. Un slot qui a atteint la fin du jeu (`stage_code == "s00a10l"`,
+"Épilogue : cimetière") a forcément déjà eu ses emblèmes évalués et
+accordés avec exactement les stats qu'on peut lire dans son fichier. Il
+suffit donc de :
+
+1. Filtrer les slots réellement **terminés** (`is_completed_playthrough()`)
+   — indispensable : un slot fraîchement commencé a des stats à 0 partout,
+   ce qui le fait *qualifier à tort* pour plein d'emblèmes bas-seuil
+   (BIG BOSS, PIGEON, SCORPION...) jamais réellement accordés puisque la
+   partie n'a jamais été finie. Vérifié empiriquement : sans ce filtre,
+   deux saves de test tout juste créées (Big Boss/Extreme) "débloquaient"
+   à tort 8-10 emblèmes chacune.
+2. Calculer les emblèmes éligibles sur *chacun* de ces slots terminés
+   séparément, puis faire l'**union** de tous les IDs obtenus.
+
+Validé sur les 2 vraies parties terminées de l'utilisateur : `903CC9`
+(SOLID NORMAL) → {10,14,26,32} ; `919CFF` (LIQUID FACILE) → {5,6,7,8,14,32}.
+Union = {5,6,7,8,10,14,26,32}, cohérent avec des runs propres et rapides
+(peu d'alertes/continues, bon score CQC/headshots). Aucune fausse
+qualification de save fraîche mélangée dedans.
+
+Fonctions : `is_completed_playthrough(mgs4_sav_path)` et
+`compute_lifetime_emblems(slot_paths)` dans `mgs4save.py`. L'interface
+affiche 3 états par badge : obtenu à vie (doré plein), serait obtenu en
+terminant la run actuelle maintenant mais pas encore obtenu ailleurs
+(contour doré), verrouillé (gris).
+
+**Limite connue** : si l'utilisateur a supprimé/écrasé une save qui avait
+servi à obtenir un emblème (plus aucun slot disque ne prouve cette
+completion), cet emblème disparaîtra de notre calcul même s'il est
+toujours affiché comme obtenu par le jeu lui-même (qui a peut-être un
+vrai registre persistant ailleurs, non retrouvé). Pas de solution pour
+ce cas sans localiser le vrai stockage dans `MGS4SYS.SAV`.
+
+### Petits compléments trouvés en creusant le dépôt bbtracker en detail
+
+- Le dépôt contient aussi un script `scripts/inspect-mgs4-save.py` qui
+  confirme `0x0000` comme contenant le numéro de partie (ils l'appellent
+  "clear_count" en u32, mais en réalité c'est un u16 à `0x0000` — vérifié
+  sur nos 3 slots réels : 903CC9→1, 919CFF→2, 91DA17→3, exactement comme
+  `numero_partie` de METADATA.SAV. Le u16 juste après (`0x0002`) vaut
+  toujours 1 chez nous, rôle inconnu).
+- Le "footer" de 8 octets en fin de `MGS4.SAV`/`MGS4SYS.SAV` que la doc
+  externe présente comme une chaîne fixe ("XPQT3Q5\0") est en fait une
+  **donnée d'intégrité qui varie par fichier** (leur propre script plante
+  sur nos saves avec "unsupported framing" à cause de ça) — cohérent avec
+  ce qu'on avait nous-mêmes observé (zone qui change de façon chaotique
+  dès qu'autre chose change dans le fichier). Ne pas copier leur script
+  tel quel, notre `decrypt()` qui ignore le footer fonctionne mieux.
+- Tableau `0x352` (u16[68], sentinelle `0xFFFF` = slot vide) : rôle encore
+  incertain, semble être des slots d'équipement/loadout plutôt qu'un
+  inventaire complet.
+
 ### Emblèmes (40, formules exactes disponibles)
 
 Chaque emblème est un seuil sur des stats qu'on a déjà (alertes, kills,

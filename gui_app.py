@@ -165,6 +165,8 @@ QPushButton#emblemLocked { background: rgba(255,255,255,10); color: #6a6a6a; bor
 QPushButton#emblemLocked:hover { background: rgba(255,255,255,25); }
 QPushButton#emblemUnlocked { background: rgba(201,162,75,35); color: #f0f0f0; border: 1px solid #c9a24b; font-weight: 700; }
 QPushButton#emblemUnlocked:hover { background: rgba(201,162,75,55); }
+QPushButton#emblemProjected { background: rgba(255,255,255,10); color: #d8c39a; border: 2px solid #c9a24b; font-weight: 600; }
+QPushButton#emblemProjected:hover { background: rgba(255,255,255,25); }
 """
 
 
@@ -310,8 +312,15 @@ class EmblemDialog(QDialog):
         self.setWindowTitle(f"Emblème {emblem['id']} — {emblem['name']}")
         layout = QVBoxLayout(self)
 
-        status = QLabel("Débloqué (avec les stats actuelles)" if emblem["unlocked"] else "Pas encore débloqué")
-        status.setObjectName("subtitle" if emblem["unlocked"] else "placeholder")
+        if emblem.get("obtained"):
+            status_text = "Déjà obtenu (partie terminée)"
+        elif emblem.get("projected"):
+            status_text = "Pas encore obtenu — serait débloqué en terminant cette partie maintenant"
+        else:
+            status_text = "Pas encore obtenu"
+        status = QLabel(status_text)
+        status.setObjectName("subtitle" if emblem.get("obtained") or emblem.get("projected") else "placeholder")
+        status.setWordWrap(True)
         layout.addWidget(status)
 
         req_title = QLabel("CONDITION")
@@ -342,11 +351,13 @@ class EmblemsPanel(QWidget):
         outer.addWidget(header)
 
         self.subtitle = QLabel(
-            "Estimation avec les stats actuelles — le jeu ne les attribue réellement\n"
-            "qu'à l'écran de résultats final. Clique sur un emblème pour sa condition."
+            "Doré = déjà obtenu sur une partie terminée. Contour doré = serait obtenu\n"
+            "en terminant la partie en cours maintenant. Clique pour la condition."
         )
         self.subtitle.setObjectName("placeholder")
         outer.addWidget(self.subtitle)
+
+        self.all_slots = []
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -361,6 +372,9 @@ class EmblemsPanel(QWidget):
         self.placeholder.setObjectName("placeholder")
         outer.addWidget(self.placeholder)
 
+    def set_all_slots(self, slots):
+        self.all_slots = slots
+
     def show_slot(self, slot):
         self.placeholder.hide()
         while self.grid.count():
@@ -368,10 +382,21 @@ class EmblemsPanel(QWidget):
             if child.widget():
                 child.widget().deleteLater()
 
+        lifetime_ids = mgs4save.compute_lifetime_emblems(
+            [(s.mgs4_sav, s.metadata_sav) for s in self.all_slots]
+        )
         emblems = mgs4save.compute_emblems(slot.mgs4_sav, slot.metadata_sav)
         for i, emblem in enumerate(emblems):
+            emblem = dict(emblem)
+            emblem["obtained"] = emblem["id"] in lifetime_ids
+            emblem["projected"] = emblem["unlocked"] and not emblem["obtained"]
             btn = QPushButton(f"{emblem['id']:02d}\n{emblem['name']}")
-            btn.setObjectName("emblemUnlocked" if emblem["unlocked"] else "emblemLocked")
+            if emblem["obtained"]:
+                btn.setObjectName("emblemUnlocked")
+            elif emblem["projected"]:
+                btn.setObjectName("emblemProjected")
+            else:
+                btn.setObjectName("emblemLocked")
             btn.setMinimumSize(130, 64)
             btn.clicked.connect(lambda _checked=False, e=emblem: self._show_dialog(e))
             self.grid.addWidget(btn, i // self.COLUMNS, i % self.COLUMNS)
@@ -437,6 +462,7 @@ class MainWindow(QMainWindow):
             (slot, mgs4save.read_metadata_summary(slot.metadata_sav)) for slot in slots
         ]
         self.list_panel.set_slots(slots_with_summary)
+        self.emblems_panel.set_all_slots(slots)
 
     def show_stats(self, slot):
         self.stats_panel.show_slot(slot)

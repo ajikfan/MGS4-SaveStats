@@ -320,6 +320,31 @@ EMBLEMS = [
 ]
 
 
+ENDING_STAGE_CODE = "s00a10l"  # "Epilogue : cimetiere" - seul stage atteint par une partie reellement terminee
+
+
+def is_completed_playthrough(mgs4_sav_path: str) -> bool:
+    """Vrai seulement si ce slot a effectivement atteint la fin du jeu (et
+    non pas juste des stats basses parce que la partie vient de commencer -
+    voir notes.md, sinon des saves fraiches "qualifient" a tort pour des
+    emblemes bas-seuil jamais reellement accordes)."""
+    return read_progress_info(mgs4_sav_path)["stage_code"] == ENDING_STAGE_CODE
+
+
+def compute_lifetime_emblems(slot_paths: list[tuple[str, str]]) -> set[int]:
+    """Emblemes reellement obtenus a vie : union des emblemes eligibles sur
+    chaque slot **effectivement termine** uniquement (le jeu ne les accorde
+    qu'a l'ecran de resultats final). slot_paths : liste de
+    (mgs4_sav_path, metadata_path)."""
+    obtained: set[int] = set()
+    for mgs4_sav_path, metadata_path in slot_paths:
+        if not is_completed_playthrough(mgs4_sav_path):
+            continue
+        emblems = compute_emblems(mgs4_sav_path, metadata_path)
+        obtained |= {e["id"] for e in emblems if e["unlocked"]}
+    return obtained
+
+
 def compute_emblems(mgs4_sav_path: str, metadata_path: str) -> list[dict]:
     """Retourne les 40 emblemes avec leur statut "serait obtenu maintenant"
     au vu des stats actuelles (le jeu ne les evalue reellement qu'a l'ecran
