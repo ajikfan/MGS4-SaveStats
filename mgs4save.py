@@ -25,8 +25,8 @@ STATS = {
     "ko_couteau": (0x186, "<H"),
     "roulades_cote": (0x188, "<H"),
     "roulades_avant": (0x18a, "<H"),
-    "armes_objets_acquis": (0x18e, "<H"),  # +4 par rapport a la valeur affichee en jeu, voir notes.md
     "pages_magazine_tournees": (0x19e, "<H"),
+    "objets_donnes_milices": (0x198, "<H"),
     "soins_utilises": (0x0ae0, "<H"),
     "drebin_actuel": (0x1c0, "<I"),
     "drebin_total_ventes": (0x1c4, "<I"),
@@ -37,7 +37,7 @@ STATS = {
 
 # Decalages constants entre la valeur brute du fichier et celle affichee en
 # jeu, quand ils existent (voir notes.md pour l'hypothese).
-DISPLAY_OFFSET = {"armes_objets_acquis": 4}
+DISPLAY_OFFSET = {}
 
 
 def decrypt(data: bytes) -> bytes:

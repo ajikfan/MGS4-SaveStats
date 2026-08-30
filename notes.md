@@ -87,13 +87,27 @@ qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
 | 0x1c4  | u32 | Drebin total (ventes) | Haute | Correspondance unique dans tout le fichier |
 | 0x158  | u16 | Continue | Haute | Transition exacte 1→4 unique dans tout le fichier, historique cohérent (0 pendant 7 saves, puis 1, puis 4) |
 | 0x180  | u16 | CQC | Haute | Delta exact +14 (1→15) confirmé pendant que Continue augmentait différemment (+3) — désambiguïsé |
-| 0x18e  | u16 | Armes/objets acquis | Haute | Décalage constant de **+4** confirmé à deux reprises (fichier 10→14 pour affichage 14→18, puis fichier 14→15 pour affichage 18→19). `mgs4save.py` applique cette correction automatiquement (`DISPLAY_OFFSET`). Cause du décalage non comprise mais reproductible. |
+| 0x198  | u16 | Objets donnés aux milices/mercenaires | Haute | Transition exacte 0→3 unique dans le cluster de stats, resté à 0 sur 9 sauvegardes avant |
 
 ### Toujours non identifié
 
 - `0x192` : passé de 0 à 1 en même temps que Continue/CQC la première fois,
   puis n'a plus bougé alors que Continue et CQC continuaient d'augmenter.
   Ne correspond à aucune stat de la liste connue pour l'instant.
+- **Armes/objets acquis** (`0x18e`) : **hypothèse infirmée**. Le décalage
+  constant "+4" qui collait sur 2 petits deltas (rounds avec delta ≤4) ne
+  tient plus sur un delta plus grand (delta brut 13 pour delta affiché 17).
+  Le champ suit grossièrement la même tendance mais n'est probablement pas
+  le bon, ou pas une simple relation linéaire. Retiré de `STATS`. À
+  rechercher à nouveau par transition exacte (valeur affichée avant/après,
+  sans offset supposé) sur le prochain changement.
+- **Armes obtenues** (55 puis 57, delta+2) : introuvable comme entier brut
+  sous aucun format (B/H/I, LE/BE) dans tout le fichier. Hypothèse : ce
+  n'est pas un compteur stocké mais une valeur **calculée** — par exemple
+  le nombre d'entrées valides dans la table d'objets/armes repérée vers
+  0x0820-0x0880 (ou une autre table similaire), plutôt qu'un scalaire
+  dédié. Nécessiterait de cartographier cette table plus précisément
+  (structure des entrées, marqueur "vide" vs "occupé") pour la retrouver.
 
 ### Pistes non confirmées (faux départs à éviter)
 
