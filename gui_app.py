@@ -39,7 +39,7 @@ STAT_GROUPS = [
         [
             ("kills_total", "Kills"),
             ("headshots", "Headshots"),
-            ("ko_couteau", "KO au couteau"),
+            ("ko_couteau", "Kill/KO au couteau"),
             ("cqc", "CQC"),
             ("alertes", "Alertes"),
             ("continues", "Continues"),
