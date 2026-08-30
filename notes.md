@@ -115,15 +115,26 @@ en jeu regroupe peut-être plusieurs comportements (marche accroupie +
 immobile accroupi) que le fichier ne compte pas de la même façon, cassant
 toute relation linéaire simple.
 
-Pour "temps de jeu total" : indice intéressant, sa valeur a **diminué** de
-2 secondes après une sauvegarde manuelle sans changement de zone (observé
-en jeu) — un vrai total ne devrait jamais diminuer. `METADATA.SAV` (129
-octets) n'est **pas chiffré** (contrairement à `MGS4.SAV`) et contient une
-série de timestamps/compteurs qui eux se mettent à jour à chaque
-sauvegarde manuelle — le temps de jeu total vient probablement de là plutôt
-que de `MGS4.SAV`. Pas encore corrélé (un seul échantillon capturé pour
-l'instant, `samples/METADATA_*.sav`). Basse priorité, à reprendre si
-besoin avec plusieurs échantillons de METADATA.SAV horodatés.
+**Abandonné (limite atteinte)** — Pour "temps de jeu total" : sa valeur a
+**diminué** de 2 secondes après une sauvegarde manuelle sans changement de
+zone (observé en jeu) — un vrai total ne devrait jamais diminuer.
+`METADATA.SAV` (129 octets) n'est **pas chiffré** (contrairement à
+`MGS4.SAV`) et se met à jour à chaque sauvegarde manuelle, contrairement
+aux stats de temps continu de `MGS4.SAV`. Mais un test de corrélation direct
+a montré que son champ `0x28` avance au rythme du **temps réel écoulé entre
+deux sauvegardes** (2015s d'écart pour 33min35s réelles, lecture de messages
+incluse) — donc `METADATA.SAV` capture du temps système, pas du temps de jeu
+utile, et ne peut pas servir à isoler un delta de gameplay précis avec notre
+méthode (trop de bruit non lié au jeu dans l'intervalle).
+
+Pour "temps accroupi" spécifiquement : un test isolé et chronométré (marche
+accroupie confirmée sur l'écran de briefing, +191s de 520s à 711s) n'a fait
+bouger **aucun octet** de `MGS4.SAV` ressemblant à un compteur de temps
+(allongé/mur/carton restés parfaitement figés), et `METADATA.SAV` est
+inutilisable pour la raison ci-dessus. Ces deux stats sont mises de côté :
+soit elles sont calculées à la volée sans être persistées quelque part
+d'accessible, soit stockées ailleurs (un autre fichier non exploré). Pas
+prioritaire vu le nombre de stats déjà confirmées.
 
 ### Toujours non identifié
 
