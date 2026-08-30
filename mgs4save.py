@@ -64,6 +64,31 @@ def read_playtime_seconds(metadata_path: str) -> int:
     return struct.unpack_from("<I", data, 0x34)[0]
 
 
+def read_playthrough_number(metadata_path: str) -> int:
+    """Numero de partie affiche par l'etoile dans le menu de chargement du jeu
+    (1 = premiere completion, etc). Depuis METADATA.SAV, non chiffre."""
+    with open(metadata_path, "rb") as f:
+        data = f.read()
+    return struct.unpack_from("<I", data, 0x38)[0]
+
+
+# Score de difficulte -> nom affiche en jeu. Seuls 3 points connus pour
+# l'instant (voir notes.md) ; les difficultes plus dures ne sont pas mappees.
+DIFFICULTY_NAMES = {
+    20: "LIQUID FACILE",
+    30: "NAKED NORMAL",
+    35: "SOLID NORMAL",
+}
+
+
+def read_difficulty_score(metadata_path: str) -> int:
+    """Score de difficulte brut depuis METADATA.SAV. Utiliser DIFFICULTY_NAMES
+    pour le nom affiche en jeu (mapping incomplet, voir notes.md)."""
+    with open(metadata_path, "rb") as f:
+        data = f.read()
+    return struct.unpack_from("<I", data, 0x30)[0]
+
+
 def read_stats(path: str) -> dict:
     with open(path, "rb") as f:
         data = decrypt(f.read())
@@ -142,6 +167,10 @@ def main():
         if args.metadata:
             seconds = read_playtime_seconds(args.metadata)
             print(f"playtime_secondes (approx +/-30s): {seconds}")
+            print(f"numero_partie: {read_playthrough_number(args.metadata)}")
+            diff_score = read_difficulty_score(args.metadata)
+            diff_name = DIFFICULTY_NAMES.get(diff_score, f"inconnu (score {diff_score})")
+            print(f"difficulte: {diff_name}")
 
 
 if __name__ == "__main__":

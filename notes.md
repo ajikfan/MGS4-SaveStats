@@ -128,14 +128,38 @@ entre sauvegardes, pas du gameplay — à ne pas confondre avec le playtime.
 Fonction dédiée : `read_playtime_seconds(metadata_path)` dans
 `mgs4save.py` (lecture directe, pas de déchiffrement XOR nécessaire).
 
-Pour "temps accroupi" spécifiquement : un test isolé et chronométré (marche
-accroupie confirmée sur l'écran de briefing, +191s de 520s à 711s) n'a fait
-bouger **aucun octet** de `MGS4.SAV` ressemblant à un compteur de temps
-(allongé/mur/carton restés parfaitement figés), et `METADATA.SAV` est
-inutilisable pour la raison ci-dessus. Ces deux stats sont mises de côté :
-soit elles sont calculées à la volée sans être persistées quelque part
-d'accessible, soit stockées ailleurs (un autre fichier non exploré). Pas
-prioritaire vu le nombre de stats déjà confirmées.
+### Difficulté et numéro de partie (METADATA.SAV, par slot)
+
+Trouvés en comparant les 3 slots de sauvegarde réels, dont les valeurs sont
+connues via le menu de chargement du jeu (capture d'écran de
+l'utilisateur) :
+
+| Slot | Difficulté affichée | Étoile (n° partie) |
+|------|---------------------|---------------------|
+| BLJM67001G6A903CC9 | SOLID NORMAL | ★01 |
+| BLJM67001G6A919CFF | LIQUID FACILE | ★02 |
+| BLJM67001G6A91DA17 | NAKED NORMAL | ★03 |
+
+- `0x38` (u32) = **numéro de partie** (l'étoile). Correspondance exacte et
+  sans ambiguïté sur les 3 slots (1, 2, 3). Confiance haute.
+  Fonction : `read_playthrough_number(metadata_path)`.
+- `0x30` (u32) = **score de difficulté interne** (pas un simple 0-5) :
+  LIQUID FACILE=20, NAKED NORMAL=30, SOLID NORMAL=35. L'ordre croissant est
+  cohérent avec la difficulté relative connue du jeu, mais seulement 3
+  points de données — la table `DIFFICULTY_NAMES` dans `mgs4save.py` ne
+  couvre que ces 3 valeurs. Les difficultés plus dures (Naked Hard, Big
+  Boss Hard, Naked Snake Extreme) ne sont pas mappées, il faudra un save
+  dans une de ces difficultés pour compléter la table. Confiance moyenne
+  tant que la table n'est pas complète.
+
+### MGS4SYS.SAV (fichier système, partagé entre tous les slots)
+
+Chiffré avec la **même clé XOR** que `MGS4.SAV`. Contient une grande zone
+(0x40-0xc7 environ) qui ressemble à une liste d'IDs d'entrées débloquées
+dans la Database (valeurs `0x8000xxxx`), et une autre zone (0xe0-0x158)
+qui ressemble à des bitmasks (puissances de 2) — probablement des
+unlocks de contenu bonus. Pas creusé en détail, pas nécessaire pour les
+stats de jeu visées par ce projet.
 
 ### Toujours non identifié
 
