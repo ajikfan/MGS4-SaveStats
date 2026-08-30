@@ -69,11 +69,36 @@ Compteurs d'actions physiques :
 
 ## Offsets identifiés
 
-_(vide pour l'instant — à remplir au fur et à mesure des corrélations)_
+| Offset | Taille | Encodage | Stat | Confiance | Notes |
+|--------|--------|----------|------|-----------|-------|
+| 0x1c0  | 4 octets | u32 LE | Drebin actuel | Haute | Correspondance unique dans tout le fichier (952201) |
+| 0x1c4  | 4 octets | u32 LE | Drebin total (ventes) | Haute | Correspondance unique dans tout le fichier (769826) |
+| 0x186  | 4 octets | u32 LE | KO au couteau | Haute | Confirmé sur 2 sessions cohérentes (1→3 puis inchangé sans nouveau KO) |
+| 0x18a  | 4 octets | u32 LE | Roulades en avant | Haute | Correspondance unique (=6) |
+| 0x178  | 4 octets | u32 LE | Kill **ou** Headshot | Moyenne | Passé de 0 à 3 en même temps que 0x182 ; les 2 stats valaient 3 simultanément (probablement tous les kills étaient des headshots). Ambigu, à trancher avec un kill sans headshot. |
+| 0x182  | 4 octets | u32 LE | Kill **ou** Headshot | Moyenne | Voir ci-dessus |
 
-| Offset | Taille | Encodage | Stat | Confiance | Save(s) utilisée(s) |
-|--------|--------|----------|------|-----------|----------------------|
-|        |        |          |      |           |                      |
+### Pistes non confirmées (faux départs à éviter)
+
+- `0x1c2` : **faux positif**. C'est un octet interne du u32 de Drebin actuel
+  (952201 = 0x000E86C9, l'octet du milieu vaut 0x0E = 14 par coïncidence).
+  Ne pas chercher une valeur numérique connue sans vérifier qu'elle ne tombe
+  pas dans l'intervalle d'un champ déjà identifié.
+- "Armes obtenues" (55) et "Armes/objets acquis" (14) : recherche par valeur
+  peu fiable ici — il existe une zone vers 0x820-0x880 qui ressemble à une
+  table d'IDs d'objets/armes (valeurs séquentielles 0x27, 0x28, 0x29...),
+  qui génère de nombreux faux positifs pour des petites valeurs comme 14 ou
+  55. Nécessite une approche différentielle (avant/après obtention d'une
+  arme précise) plutôt qu'une recherche de valeur absolue.
+- Stats de temps (Wall Press, Crawling, Crouch Walking, Cardboard/Drum),
+  CQC, Continue, Alerte, Soins, Roulade latérale, Combat High, Flashbacks :
+  pas encore localisés avec certitude — valeur 0 ou 1 trop fréquente dans le
+  fichier pour une recherche fiable sans plusieurs points de données
+  différentiels propres.
+- **Leçon apprise** : ces compteurs ne se mettent à jour qu'au moment d'un
+  vrai changement de zone/checkpoint (chargement), pas à chaque sauvegarde
+  manuelle. Un test isolé (une seule action entre deux checkpoints) donne
+  des résultats bien plus propres qu'un enchaînement de plusieurs actions.
 
 ## Méthode de corrélation
 

@@ -14,9 +14,15 @@ XOR_KEY = bytes.fromhex(
     "323344413834327263346f69514c"
 )
 
-# Offsets confirmés par corrélation (voir notes.md). Vide pour l'instant.
+# Offsets confirmés par corrélation (voir notes.md). Offsets dans le fichier
+# déchiffré, valeurs u32 little-endian sauf indication contraire.
 # name -> (offset, struct_format)
-STATS = {}
+STATS = {
+    "drebin_actuel": (0x1c0, "<I"),
+    "drebin_total_ventes": (0x1c4, "<I"),
+    "ko_couteau": (0x186, "<I"),
+    "roulades_avant": (0x18a, "<I"),
+}
 
 
 def decrypt(data: bytes) -> bytes:
