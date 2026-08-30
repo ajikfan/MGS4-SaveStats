@@ -78,6 +78,11 @@ STAT_GROUPS = [
             ("objets_donnes_milices", "Objets donnés aux milices"),
             ("pages_magazine_tournees", "Pages de magazine tournées"),
             ("objets_speciaux_bitmask", "Objets spéciaux utilisé"),
+            ("flashbacks_vues", "Flashbacks vus"),
+            ("seringue_scanning_plug", "Seringue / Scanning Plug"),
+            ("holdups", "Hold-ups"),
+            ("body_searches", "Fouilles corporelles"),
+            ("praises", "Compliments reçus"),
         ],
     ),
     (
@@ -248,7 +253,11 @@ class StatsPanel(QWidget):
 
         stats = mgs4save.read_stats(slot.mgs4_sav)
         meta = mgs4save.read_metadata_summary(slot.metadata_sav)
-        self.title.setText(f"{meta['difficulte_nom']} — Partie n°{meta['numero_partie']}")
+        progress = mgs4save.read_progress_info(slot.mgs4_sav)
+        self.title.setText(
+            f"{meta['difficulte_nom']} — Partie n°{meta['numero_partie']}\n"
+            f"{progress['lieu']} — {progress['acte']}"
+        )
 
         cards = [
             self._build_card(group_name, [

@@ -17,6 +17,104 @@ Pas de signature cryptographique façon PS3 (pas de clé console/PSN côté PC),
 donc pas de "resigning" à prévoir. Un simple checksum anti-corruption est
 possible mais pas encore localisé.
 
+## Source externe : zexk/bbtracker (2026-08-30)
+
+Découverte tardive d'une documentation de rétro-ingénierie externe,
+beaucoup plus poussée que notre travail manuel : dépôt GitHub
+[zexk/bbtracker](https://github.com/zexk/bbtracker), fichier
+`docs/mgs4_research.md`, et le projet qui le cite,
+[InsaGram-it/mgs4-trainer](https://github.com/InsaGram-it/mgs4-trainer)
+(trainer C# qui édite la mémoire du jeu en direct).
+
+**Confirmation d'identité totale** : la clé XOR qu'ils documentent
+(`kjdyeAiwoGsklcmfu93lwsENf7845ghw523if0ul7Pkj0hn9ejwksSVE8twf03te623DA842rc4oiQL`)
+est exactement la nôtre (recouvrée indépendamment par vote majoritaire).
+Même jeu, même build, même format de save. Leur méthode : lecture directe
+de la mémoire du processus (`mgs4.exe`) pendant l'exécution, pas
+uniquement du fichier de save — plus rapide et plus précis que notre
+corrélation manuelle, mais la structure "run-stats" (`linkvarbuf`) qu'ils
+documentent est **sérialisée telle quelle dans `MGS4.SAV`** aux mêmes
+offsets, ce qui explique pourquoi presque tous nos offsets trouvés à la
+main correspondent exactement aux leurs.
+
+Cette source a permis de :
+- confirmer quasiment tous nos offsets déjà trouvés, mot pour mot ;
+- résoudre nos champs abandonnés ou mal compris (voir tableau ci-dessous
+  et sections corrigées) ;
+- donner l'offset direct de **Flashbacks vus** (`0x5a34`) sans avoir
+  besoin de corrélation (le stat n'avait jamais bougé chez nous) ;
+- révéler que plusieurs stats affichées comme une seule valeur en jeu sont
+  en réalité la **somme de deux champs distincts** en mémoire ;
+- documenter les tableaux d'armes/objets (`0x1d4` = 95 armes,
+  `0x0526` = 99 objets, plus un tableau `0x0350` de 68 entrées non
+  identifié), utiles pour un futur onglet armes/camo ;
+- documenter les **40 formules d'emblèmes exactes** (seuils sur nos
+  stats déjà connues) — un onglet Emblèmes est donc réalisable **sans
+  aucune nouvelle donnée**, juste du calcul sur ce qu'on a déjà.
+
+### Corrections apportées grâce à cette source
+
+| Ancien | Nouveau | Explication |
+|--------|---------|-------------|
+| `ko_couteau` = `0x186` seul | `ko_couteau` = `0x184` (knife kills) + `0x186` (knife knockouts) | Le briefing affiche la somme des deux |
+| `armes_objets_acquis` abandonné (hypothèse de décalage +4 infirmée) | `0x18e` (weapon pickups) + `0x190` (item pickups) | Confirmé exact : 118+18=136 correspond pile au dernier relevé connu |
+| `temps_carton_frames` = `0x1bc` seul | `0x1b8` (boîte en carton) + `0x1bc` (baril) | Deux timers distincts sommés pour l'affichage "carton/baril" |
+| `0x192` non identifié | **Hold-ups** | Nouvelle stat, jamais dans notre liste d'origine |
+| Armes obtenues introuvable | Toujours pas résolu directement, mais probablement lié à `0x1d4`/tableau armes (à explorer) | Voir tableaux d'armes ci-dessous |
+| — | `pages_magazine_tournees` = `0x19e` (Playboy) + `0x1a0` (magazine "Emotion") | Il existe deux magazines distincts, sommés pour l'affichage |
+| — | `0x168` = temps de jeu total (u32, frames@60Hz) **dans MGS4.SAV lui-même** | On ne le savait que via METADATA.SAV avant ; gardé METADATA comme source d'affichage principale (plus stable, pas de variance de framerate) |
+| — | `0x0034` = code de zone (7 caractères ASCII), `0x0054` = progression de scénario (→ Acte) | Permet d'afficher le lieu et l'Acte en cours, voir `STAGE_NAMES`/`act_from_progress()` |
+
+### Tableaux d'armes/objets (pour un futur onglet armes/camo)
+
+D'après cette source (mémoire du jeu, structure `linkvarbuf`, sérialisée
+dans `MGS4.SAV`) :
+
+| Offset | Contenu |
+|--------|---------|
+| `0x1d4` | `uint16[95]` — état de chaque arme, IDs 0 à 94 |
+| `0x0350` | `uint16[68]` — tableau lié à l'inventaire, rôle non identifié par la source elle-même |
+| `0x0526` | `uint16[99]` — état de chaque objet, IDs 0 à 98 |
+
+"Weapon count scans IDs 1..73 and counts states 1 or 2" — la valeur de
+chaque case n'est pas un simple booléen (0/1) mais peut valoir 0, 1 ou 2 ;
+le sens exact de 1 vs 2 n'est pas documenté par la source (peut-être
+"possédée" vs "équipée/personnalisée"). Il manque encore une table
+ID→nom d'arme/objet — à construire par corrélation (débloquer une arme
+connue, repérer quel index du tableau passe de 0 à 1/2) ou en cherchant
+si la source ou une autre référence communautaire la publie.
+
+### Emblèmes (40, formules exactes disponibles)
+
+Chaque emblème est un seuil sur des stats qu'on a déjà (alertes, kills,
+continues, temps, CQC, headshots, etc.), évalué uniquement en fin de
+partie par le jeu — mais rien n'empêche de calculer nous-mêmes
+"qualifierait pour quel emblème avec l'état actuel" à tout moment, comme
+le fait le trainer C# cité plus haut. Liste complète des 40 prédicats
+disponible dans `docs/mgs4_research.md` du dépôt bbtracker (section
+"Emblem predicates") — à recopier dans `mgs4save.py` le jour où l'onglet
+Emblèmes est implémenté plutôt que dupliquée ici.
+
+### METADATA.SAV, champs restants clarifiés
+
+La source confirme aussi la structure de `METADATA.SAV` qu'on avait
+déjà en grande partie déduite : `0x00` = 9× ID de ressource/stage hashés
+(pas juste des timestamps comme on le supposait), `0x24` = version
+(observée à 1), `0x28` = timestamp Unix de sauvegarde (confirme notre
+hypothèse "horloge système"), `0x2c` = taille du corps de `MGS4.SAV`
+(`0x8344`, cohérent avec ce qu'on a observé), `0x44` = copie de la
+progression de scénario.
+
+**Ambigu** : la source appelle `0x40` "save-menu progress resource index"
+alors qu'on l'utilise comme "objets donnés aux milices" (`read_metadata_summary`).
+Vérifié sur nos 3 échantillons de METADATA.SAV conservés : les trois valent 8,
+mais les milices valaient déjà 8 sur toute cette période chez nous — donc ça
+ne permet pas de trancher (coïncidence possible). Il faudrait un échantillon
+de METADATA.SAV antérieur au moment où les milices sont passées de 3 à 8
+pour vérifier si `0x40` suit ce changement ou reste sur une autre valeur.
+À garder en tête : `objets_donnes_milices` dans `read_metadata_summary()`
+pourrait être incorrect.
+
 ## Zone de stats candidate : 0x000 - 0x460
 
 Identifiée par diff entre 3 saves prises à des instants différents (28/08
@@ -172,23 +270,16 @@ stats de jeu visées par ce projet.
 
 ### Toujours non identifié
 
-- `0x192` : passé de 0 à 1 en même temps que Continue/CQC la première fois,
-  puis n'a plus bougé alors que Continue et CQC continuaient d'augmenter.
-  Ne correspond à aucune stat de la liste connue pour l'instant.
-- **Armes/objets acquis** (`0x18e`) : **hypothèse infirmée**. Le décalage
-  constant "+4" qui collait sur 2 petits deltas (rounds avec delta ≤4) ne
-  tient plus sur un delta plus grand (delta brut 13 pour delta affiché 17).
-  Le champ suit grossièrement la même tendance mais n'est probablement pas
-  le bon, ou pas une simple relation linéaire. Retiré de `STATS`. À
-  rechercher à nouveau par transition exacte (valeur affichée avant/après,
-  sans offset supposé) sur le prochain changement.
-- **Armes obtenues** (55 puis 57, delta+2) : introuvable comme entier brut
-  sous aucun format (B/H/I, LE/BE) dans tout le fichier. Hypothèse : ce
-  n'est pas un compteur stocké mais une valeur **calculée** — par exemple
-  le nombre d'entrées valides dans la table d'objets/armes repérée vers
-  0x0820-0x0880 (ou une autre table similaire), plutôt qu'un scalaire
-  dédié. Nécessiterait de cartographier cette table plus précisément
-  (structure des entrées, marqueur "vide" vs "occupé") pour la retrouver.
+- **Armes obtenues** (le stat "55 puis 57" du briefing, distinct de
+  `armes_objets_acquis`) : toujours pas résolu directement. Probablement
+  lié au tableau d'armes `0x1d4` (voir section source externe ci-dessus) —
+  la doc externe mentionne "count acquired weapon types" comme une
+  fonction native séparée qui scanne le tableau plutôt qu'un scalaire
+  stocké, cohérent avec notre observation qu'aucun entier brut ne
+  correspondait. À reprendre en scannant `0x1d4` (95 × u16) et en comptant
+  les entrées à l'état 1 ou 2 le jour où l'onglet armes est construit.
+- `0x0350` (tableau de 68 × u16) : rôle non identifié, même par la source
+  externe.
 
 ### Pistes non confirmées (faux départs à éviter)
 
@@ -205,11 +296,11 @@ stats de jeu visées par ce projet.
   suite malgré de nouvelles armes obtenues, ce n'est peut-être même pas un
   compteur qui bouge souvent (ex: "types d'armes distincts", pas "armes
   obtenues").
-- 0x1a4, 0x1a8, 0x1b0 (candidats initiaux pour accroupi/mur) : **faux
-  candidats**, écartés par le protocole strict (voir section stats de temps
-  ci-dessus pour les bons offsets : 0x1ac, 0x1b4, 0x1bc).
-- Combat High, Flashbacks : toujours pas localisés (valeurs inchangées
-  entre les sessions testées jusqu'ici, donc rien à corréler).
+- 0x1a4, 0x1b0 (candidats initiaux écartés pour mur) : **faux candidats**,
+  jamais résolus par notre propre corrélation. La source externe ne les
+  documente pas non plus (pas dans la table `linkvarbuf`) — probablement
+  des données de mission/checkpoint sans rapport avec les stats de Play
+  Data.
 - **Leçon apprise (affinée)** : les compteurs d'**événements** (kills,
   alertes, continue, CQC, roulades...) se flushent dans `MGS4.SAV` à
   **chaque sauvegarde manuelle**. Seuls les compteurs de **temps continu**

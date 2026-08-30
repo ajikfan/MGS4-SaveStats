@@ -14,24 +14,35 @@ XOR_KEY = bytes.fromhex(
     "323344413834327263346f69514c"
 )
 
-# Offsets confirmés par corrélation (voir notes.md).
-# name -> (offset, struct_format)
+# Offsets confirmés (par corrélation, puis recoupés et complétés avec la
+# documentation externe zexk/bbtracker citée dans notes.md - meme cle XOR,
+# donc meme build). name -> (offset, struct_format)
 STATS = {
     "continues": (0x158, "<H"),
     "alertes": (0x16e, "<H"),
     "kills_total": (0x178, "<H"),
+    "objets_speciaux_bitmask": (0x17a, "<H"),  # zero/non-zero uniquement, bits individuels non identifies
     "cqc": (0x180, "<H"),
     "headshots": (0x182, "<H"),
-    "ko_couteau": (0x186, "<H"),
+    "knife_kills": (0x184, "<H"),
+    "knife_knockouts": (0x186, "<H"),
     "roulades_cote": (0x188, "<H"),
     "roulades_avant": (0x18a, "<H"),
-    "pages_magazine_tournees": (0x19e, "<H"),
-    "objets_donnes_milices": (0x198, "<H"),
     "combat_high": (0x18c, "<H"),
-    "objets_speciaux_bitmask": (0x17a, "<H"),  # bit1=camo optique (valeur 2), bit0=bandana (hypothese non confirmee)
-    "soins_utilises": (0x0ae0, "<H"),
+    "weapon_pickups": (0x18e, "<H"),
+    "item_pickups": (0x190, "<H"),
+    "holdups": (0x192, "<H"),
+    "body_searches": (0x194, "<H"),
+    "praises": (0x196, "<H"),
+    "objets_donnes_milices": (0x198, "<H"),
+    "syringe_uses": (0x19a, "<H"),
+    "scanning_plug_uses": (0x19c, "<H"),
+    "playboy_pages": (0x19e, "<H"),
+    "emotion_magazine_pages": (0x1a0, "<H"),
     "drebin_actuel": (0x1c0, "<I"),
     "drebin_total_ventes": (0x1c4, "<I"),
+    "flashbacks_vues": (0x5a34, "<H"),
+    "soins_utilises": (0x0ae0, "<H"),
     # Stats de temps continu, en "frames" a framerate variable (~55-62 fps
     # observe). Ne se flushent qu'au changement de zone/checkpoint, jamais
     # sur une simple sauvegarde manuelle. Pas de conversion exacte en
@@ -39,15 +50,21 @@ STATS = {
     "temps_accroupi_frames": (0x1a8, "<H"),
     "temps_allonge_frames": (0x1ac, "<H"),
     "temps_mur_frames": (0x1b4, "<H"),
-    "temps_carton_frames": (0x1bc, "<H"),
-    # 0x192 : reste non identifie (passe de 0 a 1 en meme temps que Continue/CQC
-    # la premiere fois, puis n'a plus bouge alors que Continue et CQC continuaient
-    # d'augmenter). Pas dans la liste de stats connue, cause inconnue.
+    "temps_boite_carton_frames": (0x1b8, "<I"),
+    "temps_baril_frames": (0x1bc, "<I"),
+    "temps_jeu_frames": (0x168, "<I"),  # alternative a read_playtime_seconds(), moins precis (framerate variable)
 }
 
-# Decalages constants entre la valeur brute du fichier et celle affichee en
-# jeu, quand ils existent (voir notes.md pour l'hypothese).
-DISPLAY_OFFSET = {}
+# Stats affichees en jeu comme une seule valeur mais stockees comme la somme
+# de deux champs distincts (confirme via zexk/bbtracker, voir notes.md).
+# name -> (champ1, champ2)
+DERIVED_STATS = {
+    "ko_couteau": ("knife_kills", "knife_knockouts"),
+    "armes_objets_acquis": ("weapon_pickups", "item_pickups"),
+    "seringue_scanning_plug": ("syringe_uses", "scanning_plug_uses"),
+    "pages_magazine_tournees": ("playboy_pages", "emotion_magazine_pages"),
+    "temps_carton_frames": ("temps_boite_carton_frames", "temps_baril_frames"),
+}
 
 
 def decrypt(data: bytes) -> bytes:
@@ -91,6 +108,72 @@ def read_difficulty_score(metadata_path: str) -> int:
     return struct.unpack_from("<I", data, 0x30)[0]
 
 
+# Code de stage interne -> lieu affiche en jeu (source zexk/bbtracker,
+# extrait de common/stage/select/scenerio.gcx). Un nom combine signifie
+# qu'un seul code de stage couvre plusieurs lieux visibles en jeu.
+STAGE_NAMES = {
+    "s00a00l": "Prologue : cimetière", "s00a10l": "Épilogue : cimetière",
+    "s01a00l": "Infiltration Moyen-Orient", "s01a05l": "Infiltration Moyen-Orient",
+    "s01a10l": "Zone rouge", "s01a20l": "Planque de la milice",
+    "s01a30l": "Ruines urbaines", "s01a40l": "Palais de l'Avent",
+    "s01a50l": "Crescent Meridian", "s01a55l": "Crescent Meridian",
+    "s01a57l": "Millennium Park", "s01a60l": "Campement de Liquid",
+    "s02a10l": "Village de Cove Valley", "s02a20l": "Centrale électrique",
+    "s02a25l": "Centrale électrique", "s02a30l": "Centre de détention",
+    "s02a40l": "Manoir Vista", "s02a50l": "Laboratoire de recherche",
+    "s02a60l": "Sentier de montagne / Rivière", "s02a70l": "Embuscade de Vamp",
+    "s02a73l": "Fuite de Stryker", "s02a75l": "Fuite de Stryker", "s02a78l": "Fuite de Stryker",
+    "s02a80l": "Route des hauts bois", "s02a85l": "Entrée du marché",
+    "s02a90l": "Marché", "s02a95l": "Place du marché",
+    "s03a00l": "Gare d'Europe de l'Est", "s03a10l": "Centre-ville : la traque",
+    "s03a15l": "Centre-ville : la traque", "s03a16l": "Centre-ville : les canaux",
+    "s03a20l": "Centre-ville : la place", "s03a25l": "Centre-ville : secteur nord",
+    "s03a30l": "Cour de l'église", "s03a35l": "Poursuite à moto",
+    "s03a40l": "Poursuite à moto", "s03a60l": "Poursuite à moto",
+    "s03a50l": "Embuscade de Raging Raven", "s03a65l": "Balise d'Echo", "s03a70l": "Balise d'Echo",
+    "s03a90l": "Rivière Volta", "s04a05l": "Flashback Metal Gear Solid",
+    "s04a10l": "Champ de neige / Héliport / Hangar", "s04a20l": "Stockage d'ogives nucléaires",
+    "s04a30l": "Champ de neige / Tour de communication", "s04a40l": "Haut-fourneau / Fonderie",
+    "s04a50l": "Base souterraine", "s04a60l": "Tunnel de ravitaillement souterrain",
+    "s04a65l": "Fuite de REX", "s04a68l": "Zone portuaire",
+    "s04a70l": "Zone portuaire : REX vs RAY", "s04a75l": "Arrivée à Outer Haven",
+    "s05a10l": "Proue du navire", "s05a20l": "Centre de commandement / Hangar à missiles",
+    "s05a30l": "Couloir micro-ondes", "s05a40l": "GW",
+    "s05a45l": "Liquid Ocelot : prélude", "s05a50l": "Liquid Ocelot",
+    "s05a55l": "Liquid Ocelot : aftermath",
+    "s10a10l": "Briefing (Nomad)", "s10a20l": "Briefing Amérique du Sud",
+    "s10a30l": "Briefing Europe de l'Est", "s10a40l": "Briefing Shadow Moses",
+    "s20a00l": "USS Missouri", "s20a10l": "USS Missouri vs Outer Haven",
+    "s20a20l": "Salle de Campbell", "s30a00l": "Mariage", "s30a10l": "Hôpital",
+}
+
+# progress (0x0054, u32) -> Acte (source zexk/bbtracker)
+ACT_RANGES = [
+    (0, 50, "Acte 1"), (51, 100, "Acte 2"), (101, 162, "Acte 3"),
+    (163, 222, "Acte 4"), (223, 261, "Acte 5"), (262, 291, "Épilogue"),
+]
+
+
+def act_from_progress(progress: int) -> str:
+    for lo, hi, name in ACT_RANGES:
+        if lo <= progress <= hi:
+            return name
+    return f"inconnu ({progress})"
+
+
+def read_progress_info(path: str) -> dict:
+    """Lieu et acte actuels, depuis MGS4.SAV (source zexk/bbtracker)."""
+    with open(path, "rb") as f:
+        data = decrypt(f.read())
+    stage_code = data[0x34:0x3b].decode("ascii", errors="replace")
+    progress = struct.unpack_from("<I", data, 0x54)[0]
+    return {
+        "stage_code": stage_code,
+        "lieu": STAGE_NAMES.get(stage_code, f"inconnu ({stage_code})"),
+        "acte": act_from_progress(progress),
+    }
+
+
 def read_metadata_summary(metadata_path: str) -> dict:
     """Resume rapide d'un slot depuis METADATA.SAV seul (pas de dechiffrement
     necessaire) : suffisant pour un ecran de liste sans ouvrir MGS4.SAV."""
@@ -110,10 +193,13 @@ def read_metadata_summary(metadata_path: str) -> dict:
 def read_stats(path: str) -> dict:
     with open(path, "rb") as f:
         data = decrypt(f.read())
-    return {
-        name: struct.unpack_from(fmt, data, offset)[0] + DISPLAY_OFFSET.get(name, 0)
+    values = {
+        name: struct.unpack_from(fmt, data, offset)[0]
         for name, (offset, fmt) in STATS.items()
     }
+    for name, (field_a, field_b) in DERIVED_STATS.items():
+        values[name] = values[field_a] + values[field_b]
+    return values
 
 
 def find_value(data: bytes, value: int, region: tuple[int, int] | None = None):
