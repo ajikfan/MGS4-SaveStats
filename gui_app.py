@@ -104,11 +104,16 @@ def frames_to_hms_approx(frames) -> str:
     return seconds_to_hms(frames / FRAMES_PER_SECOND)
 
 
+DREBIN_FIELDS = {"drebin_actuel", "drebin_total_ventes"}
+
+
 def format_stat_value(key: str, value) -> str:
     if key in FRAME_FIELDS:
         return frames_to_hms_approx(value)
     if key == "objets_speciaux_bitmask":
         return "Oui" if value else "Non"
+    if key in DREBIN_FIELDS:
+        return f"{value:,}".replace(",", " ")
     return str(value)
 
 
@@ -182,7 +187,7 @@ class SlotListPanel(QWidget):
             label = (
                 f"{summary['difficulte_nom']}  —  Partie n°{summary['numero_partie']}\n"
                 f"Temps de jeu : {seconds_to_hms(summary['playtime_secondes'])}    "
-                f"Drebin : {summary['drebin_actuel']}"
+                f"Drebin : {format_stat_value('drebin_actuel', summary['drebin_actuel'])}"
             )
             item = QListWidgetItem(label)
             if os.path.isfile(slot.icon_png):
