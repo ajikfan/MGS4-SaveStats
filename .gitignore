@@ -4,3 +4,6 @@ __pycache__/
 themes/*.jpg
 themes/*.png
 !themes/README.md
+build/
+dist/
+*.spec

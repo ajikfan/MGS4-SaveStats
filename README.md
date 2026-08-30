@@ -45,8 +45,37 @@ Voir [`notes.md`](notes.md) pour l'état détaillé de la rétro-ingénierie
 
 Voir [`notes.md`](notes.md#stats-cibles).
 
+## Interface graphique
+
+`gui_app.py` (PySide6) : détection automatique du dossier de sauvegarde,
+liste des slots à gauche (miniature, difficulté, temps de jeu, Drebin),
+détail des stats à droite au clic. Bouton "Changer de dossier…" en secours
+si la détection automatique échoue (bibliothèque Steam non standard, etc.).
+
+```
+python gui_app.py
+```
+
+Fond d'écran personnalisable : voir `themes/README.md`.
+
+## Empaqueter en .exe autonome
+
+```
+python -m PyInstaller --name "MGS4SaveStats" --windowed --onedir --noupx --noconfirm gui_app.py
+```
+
+Le résultat est dans `dist/MGS4SaveStats/` (dossier complet à copier, pas
+juste l'exe — mode `--onedir` choisi plutôt que `--onefile` pour réduire
+les faux positifs antivirus liés à l'auto-extraction en mémoire).
+
+L'exe n'est pas signé (un certificat de signature valable coûte cher pour
+un usage personnel) : Windows SmartScreen affichera un avertissement au
+premier lancement ("Windows a protégé votre PC") — c'est normal pour un
+outil indépendant non signé, il suffit de cliquer "Informations
+complémentaires" → "Exécuter quand même".
+
 ## Statut
 
-En cours de reverse engineering par corrélation : on compare des saves à
-values connues (affichées en jeu à l'écran de briefing) pour localiser
-l'offset et l'encodage de chaque compteur.
+Toutes les stats visées ont été localisées et vérifiées sur plusieurs
+sauvegardes indépendantes (voir `notes.md` pour le détail complet des
+offsets et de la méthode de corrélation).
