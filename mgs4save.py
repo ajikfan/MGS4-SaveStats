@@ -28,6 +28,7 @@ STATS = {
     "pages_magazine_tournees": (0x19e, "<H"),
     "objets_donnes_milices": (0x198, "<H"),
     "combat_high": (0x18c, "<H"),
+    "objets_speciaux_bitmask": (0x17a, "<H"),  # bit1=camo optique (valeur 2), bit0=bandana (hypothese non confirmee)
     "soins_utilises": (0x0ae0, "<H"),
     "drebin_actuel": (0x1c0, "<I"),
     "drebin_total_ventes": (0x1c4, "<I"),
