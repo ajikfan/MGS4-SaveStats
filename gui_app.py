@@ -31,7 +31,25 @@ from PySide6.QtWidgets import (
 import mgs4save
 import save_finder
 
-THEME_BACKGROUND = os.path.join(os.path.dirname(__file__), "themes", "background.jpg")
+def _bundled_path(*parts):
+    """Fichier embarque dans l'exe (PyInstaller --add-data), ou a cote du
+    script en mode developpement."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
+
+
+def _external_path(*parts):
+    """Fichier a cote de l'exe distribue (pas embarque) : permet a
+    l'utilisateur de le remplacer sans reconstruire l'exe."""
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, *parts)
+
+
+THEME_BACKGROUND = _external_path("themes", "background.jpg")
+APP_ICON = _bundled_path("assets", "app_icon.ico")
 
 STAT_GROUPS = [
     (
@@ -329,7 +347,11 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(DARK_QSS)
+    if os.path.isfile(APP_ICON):
+        app.setWindowIcon(QIcon(APP_ICON))
     window = MainWindow()
+    if os.path.isfile(APP_ICON):
+        window.setWindowIcon(QIcon(APP_ICON))
     window.show()
     sys.exit(app.exec())
 
