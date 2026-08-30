@@ -51,10 +51,6 @@ STAT_GROUPS = [
         [
             ("roulades_avant", "Roulades en avant"),
             ("roulades_cote", "Roulades de côté"),
-            ("temps_accroupi_frames", "Temps accroupi"),
-            ("temps_allonge_frames", "Temps allongé"),
-            ("temps_mur_frames", "Temps contre un mur"),
-            ("temps_carton_frames", "Temps carton/baril"),
         ],
     ),
     (
@@ -73,6 +69,15 @@ STAT_GROUPS = [
             ("drebin_total_ventes", "Drebin Points (total ventes)"),
         ],
     ),
+]
+
+# Carte "Temps" a part : melange une valeur de METADATA.SAV (playtime) et
+# des valeurs de MGS4.SAV (frames), assemblee separement dans show_slot().
+TIME_FIELDS = [
+    ("temps_accroupi_frames", "Temps accroupi"),
+    ("temps_allonge_frames", "Temps allongé"),
+    ("temps_mur_frames", "Temps contre un mur"),
+    ("temps_carton_frames", "Temps carton/baril"),
 ]
 
 FRAME_FIELDS = {
@@ -226,10 +231,10 @@ class StatsPanel(QWidget):
             ])
             for group_name, fields in STAT_GROUPS
         ]
-        cards.append(self._build_card(
-            "Temps de jeu",
-            [("Temps de jeu total (± 30s)", seconds_to_hms(meta["playtime_secondes"]))],
-        ))
+
+        time_rows = [("Temps de jeu total (± 30s)", seconds_to_hms(meta["playtime_secondes"]))]
+        time_rows += [(label, format_stat_value(key, stats.get(key, 0))) for key, label in TIME_FIELDS]
+        cards.append(self._build_card("Temps", time_rows))
 
         columns = 2
         for i, card in enumerate(cards):
