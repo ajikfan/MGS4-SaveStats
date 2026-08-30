@@ -30,6 +30,13 @@ STATS = {
     "soins_utilises": (0x0ae0, "<H"),
     "drebin_actuel": (0x1c0, "<I"),
     "drebin_total_ventes": (0x1c4, "<I"),
+    # Stats de temps continu, en "frames" a framerate variable (~55-62 fps
+    # observe). Ne se flushent qu'au changement de zone/checkpoint, jamais
+    # sur une simple sauvegarde manuelle. Pas de conversion exacte en
+    # secondes possible (framerate non fixe), voir notes.md.
+    "temps_allonge_frames": (0x1ac, "<H"),
+    "temps_mur_frames": (0x1b4, "<H"),
+    "temps_carton_frames": (0x1bc, "<H"),
     # 0x192 : reste non identifie (passe de 0 a 1 en meme temps que Continue/CQC
     # la premiere fois, puis n'a plus bouge alors que Continue et CQC continuaient
     # d'augmenter). Pas dans la liste de stats connue, cause inconnue.

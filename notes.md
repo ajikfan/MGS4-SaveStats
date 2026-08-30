@@ -89,6 +89,42 @@ qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
 | 0x180  | u16 | CQC | Haute | Delta exact +14 (1→15) confirmé pendant que Continue augmentait différemment (+3) — désambiguïsé |
 | 0x198  | u16 | Objets donnés aux milices/mercenaires | Haute | Transition exacte 0→3 unique dans le cluster de stats, resté à 0 sur 9 sauvegardes avant |
 
+### Stats de temps continu (framerate variable, pas de seconde exacte)
+
+En reprenant 5 relevés du briefing avec les temps exacts affichés (couché,
+mur, accroupi, carton, temps de jeu) et en exigeant qu'un candidat reste
+**exactement figé** aux intervalles où le vrai temps ne bougeait pas (pas
+juste "proche"), 3 offsets ont été confirmés :
+
+| Offset | Taille | Stat | Confiance | Notes |
+|--------|--------|------|-----------|-------|
+| 0x1ac  | u16 | Temps allongé | Haute | Ratio delta-fichier/delta-affiché entre 54 et 62 sur 4 intervalles — pas un ×60 fixe, cohérent avec un framerate qui varie légèrement (~55-62 fps) plutôt qu'un jeu verrouillé à 60 fps |
+| 0x1b4  | u16 | Temps contre un mur | Haute | Même signature de ratio que ci-dessus |
+| 0x1bc  | u16 | Temps dans un carton/baril | Haute | Confirmé par un test isolé (~90s chronométrées, session sans aucun autre événement) : delta exact de 5434 sur ce seul champ, ratio ≈60.4, aucune ambiguïté |
+
+Ces champs sont donc en **frames**, pas en secondes ni centisecondes, et le
+framerate n'étant pas fixe, il n'y a pas de formule de conversion exacte
+vers des secondes (diviser par ~58-60 donne un ordre de grandeur correct,
+pas une valeur exacte).
+
+**Toujours introuvables** : temps de jeu total et temps accroupi. Recherche
+exhaustive sur tout le fichier (u16 et u32, tolérance de ratio 30%) sans
+succès. Hypothèses : ce sont des valeurs calculées autrement (pas un simple
+compteur incrémental), ou pour l'accroupi spécifiquement, le stat affiché
+en jeu regroupe peut-être plusieurs comportements (marche accroupie +
+immobile accroupi) que le fichier ne compte pas de la même façon, cassant
+toute relation linéaire simple.
+
+Pour "temps de jeu total" : indice intéressant, sa valeur a **diminué** de
+2 secondes après une sauvegarde manuelle sans changement de zone (observé
+en jeu) — un vrai total ne devrait jamais diminuer. `METADATA.SAV` (129
+octets) n'est **pas chiffré** (contrairement à `MGS4.SAV`) et contient une
+série de timestamps/compteurs qui eux se mettent à jour à chaque
+sauvegarde manuelle — le temps de jeu total vient probablement de là plutôt
+que de `MGS4.SAV`. Pas encore corrélé (un seul échantillon capturé pour
+l'instant, `samples/METADATA_*.sav`). Basse priorité, à reprendre si
+besoin avec plusieurs échantillons de METADATA.SAV horodatés.
+
 ### Toujours non identifié
 
 - `0x192` : passé de 0 à 1 en même temps que Continue/CQC la première fois,
@@ -124,21 +160,20 @@ qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
   suite malgré de nouvelles armes obtenues, ce n'est peut-être même pas un
   compteur qui bouge souvent (ex: "types d'armes distincts", pas "armes
   obtenues").
-- Stats de temps (Wall Press, Crawling, Crouch Walking, Cardboard/Drum) :
-  l'hypothèse "stockage en frames à 60 fps" (candidats 0x1a4, 0x1a8, 0x1ac,
-  0x1b0, 0x1b4) est **infirmée** — sur un 2e round de données, le ratio
-  delta-fichier/delta-affiché varie trop (60.1 puis 63.75 pour un même
-  candidat) et un candidat (0x1b0) a changé alors que le temps contre le mur
-  affiché, lui, n'avait pas bougé du tout. Ces offsets ne sont probablement
-  pas les bons, ou ne sont pas de simples compteurs linéaires. À reprendre
-  avec un protocole strict : une seule action de mouvement isolée par
-  checkpoint, chronométrée précisément (pas une estimation "+/-").
+- 0x1a4, 0x1a8, 0x1b0 (candidats initiaux pour accroupi/mur) : **faux
+  candidats**, écartés par le protocole strict (voir section stats de temps
+  ci-dessus pour les bons offsets : 0x1ac, 0x1b4, 0x1bc).
 - Combat High, Flashbacks : toujours pas localisés (valeurs inchangées
   entre les sessions testées jusqu'ici, donc rien à corréler).
-- **Leçon apprise** : ces compteurs ne se mettent à jour qu'au moment d'un
-  vrai changement de zone/checkpoint (chargement), pas à chaque sauvegarde
-  manuelle. Un test isolé (une seule action entre deux checkpoints) donne
-  des résultats bien plus propres qu'un enchaînement de plusieurs actions.
+- **Leçon apprise (affinée)** : les compteurs d'**événements** (kills,
+  alertes, continue, CQC, roulades...) se flushent dans `MGS4.SAV` à
+  **chaque sauvegarde manuelle**. Seuls les compteurs de **temps continu**
+  (accroupi/couché/mur/carton) n'apparaissent qu'au moment d'un vrai
+  changement de zone/checkpoint — probablement parce qu'ils sont accumulés
+  en mémoire pendant la zone et seulement reversés au total permanent au
+  déchargement de la zone. Pour isoler un stat de temps proprement : une
+  seule action chronométrée, puis changement de zone immédiat sans rien
+  faire d'autre entre les deux.
 
 ## Méthode de corrélation
 
