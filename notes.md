@@ -88,6 +88,7 @@ qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
 | 0x158  | u16 | Continue | Haute | Transition exacte 1→4 unique dans tout le fichier, historique cohérent (0 pendant 7 saves, puis 1, puis 4) |
 | 0x180  | u16 | CQC | Haute | Delta exact +14 (1→15) confirmé pendant que Continue augmentait différemment (+3) — désambiguïsé |
 | 0x198  | u16 | Objets donnés aux milices/mercenaires | Haute | Transition exacte 0→3 unique dans le cluster de stats, resté à 0 sur 9 sauvegardes avant |
+| 0x18c  | u16 | Poussées d'adrénaline (Combat High) | Haute | Transition exacte 0→2 unique dans le cluster de stats, resté à 0 sur 16 sauvegardes avant |
 
 ### Stats de temps continu (framerate variable, pas de seconde exacte)
 

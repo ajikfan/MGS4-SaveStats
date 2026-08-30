@@ -27,6 +27,7 @@ STATS = {
     "roulades_avant": (0x18a, "<H"),
     "pages_magazine_tournees": (0x19e, "<H"),
     "objets_donnes_milices": (0x198, "<H"),
+    "combat_high": (0x18c, "<H"),
     "soins_utilises": (0x0ae0, "<H"),
     "drebin_actuel": (0x1c0, "<I"),
     "drebin_total_ventes": (0x1c4, "<I"),
