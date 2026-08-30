@@ -85,9 +85,15 @@ qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
 | 0x0ae0 | u16 | Objets de soin utilisés | Haute | Transition exacte 2→5 unique, historique cohérent |
 | 0x1c0  | u32 | Drebin actuel | Haute | Correspondance unique dans tout le fichier |
 | 0x1c4  | u32 | Drebin total (ventes) | Haute | Correspondance unique dans tout le fichier |
-| 0x180  | u16 | Continue **ou** CQC | Ambigu | Les deux valent 0 sur tout l'historique puis 1 en même temps. À trancher avec une action qui ne déclenche que l'une des deux. |
-| 0x192  | u16 | Continue **ou** CQC | Ambigu | Voir ci-dessus |
-| 0x18e  | u16 | Probablement Armes/objets acquis | Moyenne | Le delta colle exactement (+4 à deux reprises) mais la valeur absolue a un décalage constant de -4 par rapport à ce qu'affiche le jeu (ex : fichier=14 quand le jeu affiche 18). Cause non comprise — peut-être un compteur brut incluant/excluant un objet de départ. À revérifier. |
+| 0x158  | u16 | Continue | Haute | Transition exacte 1→4 unique dans tout le fichier, historique cohérent (0 pendant 7 saves, puis 1, puis 4) |
+| 0x180  | u16 | CQC | Haute | Delta exact +14 (1→15) confirmé pendant que Continue augmentait différemment (+3) — désambiguïsé |
+| 0x18e  | u16 | Armes/objets acquis | Haute | Décalage constant de **+4** confirmé à deux reprises (fichier 10→14 pour affichage 14→18, puis fichier 14→15 pour affichage 18→19). `mgs4save.py` applique cette correction automatiquement (`DISPLAY_OFFSET`). Cause du décalage non comprise mais reproductible. |
+
+### Toujours non identifié
+
+- `0x192` : passé de 0 à 1 en même temps que Continue/CQC la première fois,
+  puis n'a plus bougé alors que Continue et CQC continuaient d'augmenter.
+  Ne correspond à aucune stat de la liste connue pour l'instant.
 
 ### Pistes non confirmées (faux départs à éviter)
 
@@ -105,12 +111,14 @@ qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
   compteur qui bouge souvent (ex: "types d'armes distincts", pas "armes
   obtenues").
 - Stats de temps (Wall Press, Crawling, Crouch Walking, Cardboard/Drum) :
-  des candidats existent (0x1a4, 0x1a8, 0x1ac, 0x1b0, 0x1b4 — deltas
-  approximativement ×60 par rapport aux deltas en secondes vus en jeu,
-  cohérent avec un stockage en frames à 60 fps), mais l'approximation n'est
-  pas assez précise pour confirmer (écarts de quelques unités, peut-être
-  dus à l'arrondi de l'affichage en jeu). À revérifier avec un intervalle
-  de temps mesuré plus précisément (chronomètre).
+  l'hypothèse "stockage en frames à 60 fps" (candidats 0x1a4, 0x1a8, 0x1ac,
+  0x1b0, 0x1b4) est **infirmée** — sur un 2e round de données, le ratio
+  delta-fichier/delta-affiché varie trop (60.1 puis 63.75 pour un même
+  candidat) et un candidat (0x1b0) a changé alors que le temps contre le mur
+  affiché, lui, n'avait pas bougé du tout. Ces offsets ne sont probablement
+  pas les bons, ou ne sont pas de simples compteurs linéaires. À reprendre
+  avec un protocole strict : une seule action de mouvement isolée par
+  checkpoint, chronométrée précisément (pas une estimation "+/-").
 - Combat High, Flashbacks : toujours pas localisés (valeurs inchangées
   entre les sessions testées jusqu'ici, donc rien à corréler).
 - **Leçon apprise** : ces compteurs ne se mettent à jour qu'au moment d'un

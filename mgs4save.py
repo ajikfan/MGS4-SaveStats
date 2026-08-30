@@ -17,19 +17,27 @@ XOR_KEY = bytes.fromhex(
 # Offsets confirmés par corrélation (voir notes.md).
 # name -> (offset, struct_format)
 STATS = {
+    "continues": (0x158, "<H"),
     "alertes": (0x16e, "<H"),
     "kills_total": (0x178, "<H"),
+    "cqc": (0x180, "<H"),
     "headshots": (0x182, "<H"),
     "ko_couteau": (0x186, "<H"),
     "roulades_cote": (0x188, "<H"),
     "roulades_avant": (0x18a, "<H"),
+    "armes_objets_acquis": (0x18e, "<H"),  # +4 par rapport a la valeur affichee en jeu, voir notes.md
     "pages_magazine_tournees": (0x19e, "<H"),
     "soins_utilises": (0x0ae0, "<H"),
     "drebin_actuel": (0x1c0, "<I"),
     "drebin_total_ventes": (0x1c4, "<I"),
-    # 0x180 et 0x192 : Continue et CQC, ordre non confirme (voir notes.md)
-    # 0x18e : probablement armes/objets acquis, decalage constant -4 non explique
+    # 0x192 : reste non identifie (passe de 0 a 1 en meme temps que Continue/CQC
+    # la premiere fois, puis n'a plus bouge alors que Continue et CQC continuaient
+    # d'augmenter). Pas dans la liste de stats connue, cause inconnue.
 }
+
+# Decalages constants entre la valeur brute du fichier et celle affichee en
+# jeu, quand ils existent (voir notes.md pour l'hypothese).
+DISPLAY_OFFSET = {"armes_objets_acquis": 4}
 
 
 def decrypt(data: bytes) -> bytes:
@@ -40,7 +48,7 @@ def read_stats(path: str) -> dict:
     with open(path, "rb") as f:
         data = decrypt(f.read())
     return {
-        name: struct.unpack_from(fmt, data, offset)[0]
+        name: struct.unpack_from(fmt, data, offset)[0] + DISPLAY_OFFSET.get(name, 0)
         for name, (offset, fmt) in STATS.items()
     }
 
