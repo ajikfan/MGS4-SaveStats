@@ -69,14 +69,25 @@ Compteurs d'actions physiques :
 
 ## Offsets identifiés
 
-| Offset | Taille | Encodage | Stat | Confiance | Notes |
-|--------|--------|----------|------|-----------|-------|
-| 0x1c0  | 4 octets | u32 LE | Drebin actuel | Haute | Correspondance unique dans tout le fichier (952201) |
-| 0x1c4  | 4 octets | u32 LE | Drebin total (ventes) | Haute | Correspondance unique dans tout le fichier (769826) |
-| 0x186  | 4 octets | u32 LE | KO au couteau | Haute | Confirmé sur 2 sessions cohérentes (1→3 puis inchangé sans nouveau KO) |
-| 0x18a  | 4 octets | u32 LE | Roulades en avant | Haute | Correspondance unique (=6) |
-| 0x178  | 4 octets | u32 LE | Kill **ou** Headshot | Moyenne | Passé de 0 à 3 en même temps que 0x182 ; les 2 stats valaient 3 simultanément (probablement tous les kills étaient des headshots). Ambigu, à trancher avec un kill sans headshot. |
-| 0x182  | 4 octets | u32 LE | Kill **ou** Headshot | Moyenne | Voir ci-dessus |
+Tous les champs de la zone 0x150-0x1c8 sont en réalité des **u16** (2 octets),
+pas des u32 comme supposé au début — l'erreur venait de champs voisins à 0
+qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
+
+| Offset | Taille | Stat | Confiance | Notes |
+|--------|--------|------|-----------|-------|
+| 0x16e  | u16 | Alertes | Haute | Transition exacte 1→4 unique dans tout le fichier, historique monotone cohérent sur 8 saves |
+| 0x178  | u16 | Total Kill | Haute | Delta exact +6 (3→9) confirmé pendant que Headshot restait figé |
+| 0x182  | u16 | Headshots | Haute | Resté à 3 alors que Total Kill montait à 9 → désambiguïsé de 0x178 |
+| 0x186  | u16 | KO au couteau | Haute | Historique cohérent sur 3 sessions (0→1→3→3→3) |
+| 0x188  | u16 | Roulades de côté | Haute | 0→7, confirmé par élimination face à 0x18a |
+| 0x18a  | u16 | Roulades en avant | Haute | Deux deltas exacts indépendants (0→6 puis 6→13) |
+| 0x19e  | u16 | Pages de magazine tournées | Haute | Transition exacte 0→8 unique, **stat non affichée dans le briefing en jeu** |
+| 0x0ae0 | u16 | Objets de soin utilisés | Haute | Transition exacte 2→5 unique, historique cohérent |
+| 0x1c0  | u32 | Drebin actuel | Haute | Correspondance unique dans tout le fichier |
+| 0x1c4  | u32 | Drebin total (ventes) | Haute | Correspondance unique dans tout le fichier |
+| 0x180  | u16 | Continue **ou** CQC | Ambigu | Les deux valent 0 sur tout l'historique puis 1 en même temps. À trancher avec une action qui ne déclenche que l'une des deux. |
+| 0x192  | u16 | Continue **ou** CQC | Ambigu | Voir ci-dessus |
+| 0x18e  | u16 | Probablement Armes/objets acquis | Moyenne | Le delta colle exactement (+4 à deux reprises) mais la valeur absolue a un décalage constant de -4 par rapport à ce qu'affiche le jeu (ex : fichier=14 quand le jeu affiche 18). Cause non comprise — peut-être un compteur brut incluant/excluant un objet de départ. À revérifier. |
 
 ### Pistes non confirmées (faux départs à éviter)
 
@@ -84,17 +95,24 @@ Compteurs d'actions physiques :
   (952201 = 0x000E86C9, l'octet du milieu vaut 0x0E = 14 par coïncidence).
   Ne pas chercher une valeur numérique connue sans vérifier qu'elle ne tombe
   pas dans l'intervalle d'un champ déjà identifié.
-- "Armes obtenues" (55) et "Armes/objets acquis" (14) : recherche par valeur
-  peu fiable ici — il existe une zone vers 0x820-0x880 qui ressemble à une
-  table d'IDs d'objets/armes (valeurs séquentielles 0x27, 0x28, 0x29...),
-  qui génère de nombreux faux positifs pour des petites valeurs comme 14 ou
-  55. Nécessite une approche différentielle (avant/après obtention d'une
-  arme précise) plutôt qu'une recherche de valeur absolue.
-- Stats de temps (Wall Press, Crawling, Crouch Walking, Cardboard/Drum),
-  CQC, Continue, Alerte, Soins, Roulade latérale, Combat High, Flashbacks :
-  pas encore localisés avec certitude — valeur 0 ou 1 trop fréquente dans le
-  fichier pour une recherche fiable sans plusieurs points de données
-  différentiels propres.
+- "Armes obtenues" (55) : recherche par valeur peu fiable — il existe une
+  zone vers 0x820-0x880 qui ressemble à une table d'IDs d'objets/armes
+  (valeurs séquentielles 0x27, 0x28, 0x29...), qui génère de nombreux faux
+  positifs pour des petites valeurs. Nécessite une approche différentielle
+  (avant/après obtention d'une arme précise) plutôt qu'une recherche de
+  valeur absolue. Vu que la valeur est restée à 55 sur 2 sauvegardes de
+  suite malgré de nouvelles armes obtenues, ce n'est peut-être même pas un
+  compteur qui bouge souvent (ex: "types d'armes distincts", pas "armes
+  obtenues").
+- Stats de temps (Wall Press, Crawling, Crouch Walking, Cardboard/Drum) :
+  des candidats existent (0x1a4, 0x1a8, 0x1ac, 0x1b0, 0x1b4 — deltas
+  approximativement ×60 par rapport aux deltas en secondes vus en jeu,
+  cohérent avec un stockage en frames à 60 fps), mais l'approximation n'est
+  pas assez précise pour confirmer (écarts de quelques unités, peut-être
+  dus à l'arrondi de l'affichage en jeu). À revérifier avec un intervalle
+  de temps mesuré plus précisément (chronomètre).
+- Combat High, Flashbacks : toujours pas localisés (valeurs inchangées
+  entre les sessions testées jusqu'ici, donc rien à corréler).
 - **Leçon apprise** : ces compteurs ne se mettent à jour qu'au moment d'un
   vrai changement de zone/checkpoint (chargement), pas à chaque sauvegarde
   manuelle. Un test isolé (une seule action entre deux checkpoints) donne

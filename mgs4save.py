@@ -14,14 +14,21 @@ XOR_KEY = bytes.fromhex(
     "323344413834327263346f69514c"
 )
 
-# Offsets confirmés par corrélation (voir notes.md). Offsets dans le fichier
-# déchiffré, valeurs u32 little-endian sauf indication contraire.
+# Offsets confirmés par corrélation (voir notes.md).
 # name -> (offset, struct_format)
 STATS = {
+    "alertes": (0x16e, "<H"),
+    "kills_total": (0x178, "<H"),
+    "headshots": (0x182, "<H"),
+    "ko_couteau": (0x186, "<H"),
+    "roulades_cote": (0x188, "<H"),
+    "roulades_avant": (0x18a, "<H"),
+    "pages_magazine_tournees": (0x19e, "<H"),
+    "soins_utilises": (0x0ae0, "<H"),
     "drebin_actuel": (0x1c0, "<I"),
     "drebin_total_ventes": (0x1c4, "<I"),
-    "ko_couteau": (0x186, "<I"),
-    "roulades_avant": (0x18a, "<I"),
+    # 0x180 et 0x192 : Continue et CQC, ordre non confirme (voir notes.md)
+    # 0x18e : probablement armes/objets acquis, decalage constant -4 non explique
 }
 
 
