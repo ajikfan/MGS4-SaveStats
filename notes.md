@@ -144,15 +144,15 @@ l'utilisateur) :
   sans ambiguïté sur les 3 slots (1, 2, 3). Confiance haute.
   Fonction : `read_playthrough_number(metadata_path)`.
 - `0x30` (u32) = **score de difficulté interne** (pas un simple 0-5) :
-  LIQUID FACILE=20, NAKED NORMAL=30, SOLID NORMAL=35. Les 5 niveaux
-  officiels du jeu, dans l'ordre (capture d'écran du menu de sélection) :
-  LIQUID FACILE, NAKED NORMAL, SOLID NORMAL, BIG BOSS DIFFICILE,
-  THE BOSS EXTRÊME. Seuls les 3 premiers ont une valeur numérique confirmée
-  pour l'instant — pas de formule évidente (20, 30, 35 : pas un pas
-  linéaire constant), donc BIG BOSS DIFFICILE et THE BOSS EXTRÊME ne
-  peuvent pas être extrapolés, il faut un vrai save dans ces difficultés.
-  La table `DIFFICULTY_NAMES` dans `mgs4save.py` ne couvre que les 3
-  valeurs connues. Confiance moyenne tant que la table n'est pas complète.
+  LIQUID FACILE=20, NAKED NORMAL=30, SOLID NORMAL=35, BIG BOSS DIFFICILE=50
+  (confirmé sur un save frais créé exprès par l'utilisateur, slot
+  `BLJM67001G6A944D92`). Les 5 niveaux officiels du jeu, dans l'ordre
+  (capture d'écran du menu de sélection) : LIQUID FACILE, NAKED NORMAL,
+  SOLID NORMAL, BIG BOSS DIFFICILE, THE BOSS EXTRÊME. Pas de formule
+  linéaire évidente (20, 30, 35, 50), donc THE BOSS EXTRÊME ne peut pas
+  être extrapolé — il faudrait un save dans cette dernière difficulté pour
+  compléter la table `DIFFICULTY_NAMES` dans `mgs4save.py`. Confiance haute
+  pour les 4 valeurs connues, la 5e reste à trouver.
 
 ### MGS4SYS.SAV (fichier système, partagé entre tous les slots)
 
