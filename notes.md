@@ -89,7 +89,7 @@ qui masquaient la vraie largeur. Attention en lisant du code plus ancien.
 | 0x180  | u16 | CQC | Haute | Delta exact +14 (1→15) confirmé pendant que Continue augmentait différemment (+3) — désambiguïsé |
 | 0x198  | u16 | Objets donnés aux milices/mercenaires | Haute | Transition exacte 0→3 unique dans le cluster de stats, resté à 0 sur 9 sauvegardes avant |
 | 0x18c  | u16 | Poussées d'adrénaline (Combat High) | Haute | Transition exacte 0→2 unique dans le cluster de stats, resté à 0 sur 16 sauvegardes avant |
-| 0x17a  | u16 | Objets spéciaux utilisés (bitmask) | Haute | Passé de 0 à **2** (pas 1) après usage de la Stealth Camo — confirme l'hypothèse de l'utilisateur : ce n'est pas un booléen mais un bitmask. Hypothèse : bit1 (valeur 2) = camo optique, bit0 (valeur 1) = bandana. Resté à 0 sur 17 sauvegardes avant. **Bandana non testé** (pas encore obtenu en jeu) — à confirmer : la valeur devrait passer à 3 si les deux objets sont utilisés. |
+| 0x17a  | u16 | "Objets spéciaux : utilisé" (bitmask) | Haute | Affiché en jeu comme "utilisé" sans autre précision (pas de "oui/non" séparé par objet). Passé de 0 à **2** (pas 1) après usage de la Stealth Camo — confirme l'hypothèse de l'utilisateur : ce n'est pas un booléen mais un bitmask. Hypothèse : bit1 (valeur 2) = camo optique, bit0 (valeur 1) = bandana. Resté à 0 sur 17 sauvegardes avant. **Bandana non testé** (pas encore obtenu en jeu) — à confirmer : la valeur devrait passer à 3 si les deux objets sont utilisés. |
 
 ### Stats de temps continu (framerate variable, pas de seconde exacte)
 
