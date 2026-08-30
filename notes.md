@@ -108,25 +108,31 @@ framerate n'étant pas fixe, il n'y a pas de formule de conversion exacte
 vers des secondes (diviser par ~58-60 donne un ordre de grandeur correct,
 pas une valeur exacte).
 
-**Toujours introuvables** : temps de jeu total et temps accroupi. Recherche
-exhaustive sur tout le fichier (u16 et u32, tolérance de ratio 30%) sans
-succès. Hypothèses : ce sont des valeurs calculées autrement (pas un simple
-compteur incrémental), ou pour l'accroupi spécifiquement, le stat affiché
-en jeu regroupe peut-être plusieurs comportements (marche accroupie +
-immobile accroupi) que le fichier ne compte pas de la même façon, cassant
-toute relation linéaire simple.
+**Toujours introuvable** : temps accroupi. Recherche exhaustive sur tout
+`MGS4.SAV` (u16 et u32, tolérance de ratio 30%) sans succès, et un test
+isolé chronométré (+191s confirmés en jeu) n'a fait bouger aucun octet.
+Hypothèse : le stat affiché en jeu regroupe peut-être plusieurs
+comportements (marche accroupie + immobile accroupi) que le fichier ne
+compte pas de la même façon, cassant toute relation linéaire simple — ou
+il est calculé/stocké ailleurs, pas encore trouvé.
 
-**Abandonné (limite atteinte)** — Pour "temps de jeu total" : sa valeur a
-**diminué** de 2 secondes après une sauvegarde manuelle sans changement de
-zone (observé en jeu) — un vrai total ne devrait jamais diminuer.
-`METADATA.SAV` (129 octets) n'est **pas chiffré** (contrairement à
-`MGS4.SAV`) et se met à jour à chaque sauvegarde manuelle, contrairement
-aux stats de temps continu de `MGS4.SAV`. Mais un test de corrélation direct
-a montré que son champ `0x28` avance au rythme du **temps réel écoulé entre
-deux sauvegardes** (2015s d'écart pour 33min35s réelles, lecture de messages
-incluse) — donc `METADATA.SAV` capture du temps système, pas du temps de jeu
-utile, et ne peut pas servir à isoler un delta de gameplay précis avec notre
-méthode (trop de bruit non lié au jeu dans l'intervalle).
+**Résolu (avec réserve)** — "temps de jeu total" est dans `METADATA.SAV`
+(129 octets, **non chiffré**, contrairement à `MGS4.SAV`), à l'offset
+`0x34` (u32 LE), **en secondes directement** (pas en frames). Confirmé sur
+2 points de données indépendants avec un écart constant de 24-28s par
+rapport à la valeur affichée en jeu (3729 vs 3753s ; 5187 vs 5215s) — écart
+probablement dû au fait que le compteur en jeu continue de tourner un peu
+entre l'écriture du fichier et le moment où le joueur lit l'écran. Précision
+donc approximative (+/-30s), mais l'ordre de grandeur et la tendance sont
+fiables. `METADATA.SAV` contient aussi des copies non chiffrées d'autres
+stats déjà connues (0x3c = Drebin actuel, 0x40 = objets donnés aux
+milices), ce qui a aidé à confirmer que ce fichier reflète bien l'état du
+jeu à la dernière sauvegarde. Son champ `0x28` est un timestamp système
+(Unix, ~date réelle actuelle) qui avance au rythme du temps réel écoulé
+entre sauvegardes, pas du gameplay — à ne pas confondre avec le playtime.
+
+Fonction dédiée : `read_playtime_seconds(metadata_path)` dans
+`mgs4save.py` (lecture directe, pas de déchiffrement XOR nécessaire).
 
 Pour "temps accroupi" spécifiquement : un test isolé et chronométré (marche
 accroupie confirmée sur l'écran de briefing, +191s de 520s à 711s) n'a fait

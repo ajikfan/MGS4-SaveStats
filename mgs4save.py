@@ -52,6 +52,16 @@ def decrypt(data: bytes) -> bytes:
     return bytes(b ^ XOR_KEY[i % len(XOR_KEY)] for i, b in enumerate(data))
 
 
+def read_playtime_seconds(metadata_path: str) -> int:
+    """Lit le temps de jeu total depuis METADATA.SAV (non chiffre, contrairement
+    a MGS4.SAV). Precision approximative : +/- 30s par rapport a l'affichage
+    en jeu (le compteur en jeu continue de tourner un peu apres l'ecriture du
+    fichier), voir notes.md."""
+    with open(metadata_path, "rb") as f:
+        data = f.read()
+    return struct.unpack_from("<I", data, 0x34)[0]
+
+
 def read_stats(path: str) -> dict:
     with open(path, "rb") as f:
         data = decrypt(f.read())
@@ -95,6 +105,9 @@ def main():
 
     p_stats = sub.add_parser("stats", help="Affiche les stats déjà identifiées")
     p_stats.add_argument("save_path")
+    p_stats.add_argument(
+        "--metadata", help="Chemin vers METADATA.SAV (pour le temps de jeu total)"
+    )
 
     args = parser.parse_args()
 
@@ -124,6 +137,9 @@ def main():
             return
         for name, value in read_stats(args.save_path).items():
             print(f"{name}: {value}")
+        if args.metadata:
+            seconds = read_playtime_seconds(args.metadata)
+            print(f"playtime_secondes (approx +/-30s): {seconds}")
 
 
 if __name__ == "__main__":
