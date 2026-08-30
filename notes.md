@@ -99,6 +99,7 @@ juste "proche"), 3 offsets ont été confirmés :
 
 | Offset | Taille | Stat | Confiance | Notes |
 |--------|--------|------|-----------|-------|
+| 0x1a8  | u16 | Temps accroupi | Haute | Ratio ≈60.00 sur les 8 points de données disponibles (60.13, 60.13, 60.26, 60.03, 60.07, 60.07, 60.02, 60.01) — le plus précis de tous les stats de temps. Trouvé en réutilisant tout l'historique de la conversation (8 points/7 intervalles) plutôt que 2-5 points ; écarté à tort au tout début sur la base de 2 points seulement en le testant (à tort) pour "mur" |
 | 0x1ac  | u16 | Temps allongé | Haute | Ratio delta-fichier/delta-affiché entre 54 et 62 sur 4 intervalles — pas un ×60 fixe, cohérent avec un framerate qui varie légèrement (~55-62 fps) plutôt qu'un jeu verrouillé à 60 fps |
 | 0x1b4  | u16 | Temps contre un mur | Haute | Même signature de ratio que ci-dessus |
 | 0x1bc  | u16 | Temps dans un carton/baril | Haute | Confirmé par un test isolé (~90s chronométrées, session sans aucun autre événement) : delta exact de 5434 sur ce seul champ, ratio ≈60.4, aucune ambiguïté |
@@ -107,14 +108,6 @@ Ces champs sont donc en **frames**, pas en secondes ni centisecondes, et le
 framerate n'étant pas fixe, il n'y a pas de formule de conversion exacte
 vers des secondes (diviser par ~58-60 donne un ordre de grandeur correct,
 pas une valeur exacte).
-
-**Toujours introuvable** : temps accroupi. Recherche exhaustive sur tout
-`MGS4.SAV` (u16 et u32, tolérance de ratio 30%) sans succès, et un test
-isolé chronométré (+191s confirmés en jeu) n'a fait bouger aucun octet.
-Hypothèse : le stat affiché en jeu regroupe peut-être plusieurs
-comportements (marche accroupie + immobile accroupi) que le fichier ne
-compte pas de la même façon, cassant toute relation linéaire simple — ou
-il est calculé/stocké ailleurs, pas encore trouvé.
 
 **Résolu (avec réserve)** — "temps de jeu total" est dans `METADATA.SAV`
 (129 octets, **non chiffré**, contrairement à `MGS4.SAV`), à l'offset

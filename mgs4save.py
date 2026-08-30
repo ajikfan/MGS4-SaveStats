@@ -35,6 +35,7 @@ STATS = {
     # observe). Ne se flushent qu'au changement de zone/checkpoint, jamais
     # sur une simple sauvegarde manuelle. Pas de conversion exacte en
     # secondes possible (framerate non fixe), voir notes.md.
+    "temps_accroupi_frames": (0x1a8, "<H"),
     "temps_allonge_frames": (0x1ac, "<H"),
     "temps_mur_frames": (0x1b4, "<H"),
     "temps_carton_frames": (0x1bc, "<H"),
