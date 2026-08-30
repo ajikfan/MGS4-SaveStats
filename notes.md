@@ -84,7 +84,7 @@ ID→nom d'arme/objet — à construire par corrélation (débloquer une arme
 connue, repérer quel index du tableau passe de 0 à 1/2) ou en cherchant
 si la source ou une autre référence communautaire la publie.
 
-### Emblèmes obtenus "à vie" (persistance retrouvée sans MGS4SYS.SAV)
+### Emblèmes obtenus "à vie" — RÉSOLU : vrai bitmask trouvé à 0x18
 
 L'utilisateur a fait remarquer à juste titre qu'une simple évaluation des
 prédicats sur les stats de la partie **en cours** ne suffit pas : un
@@ -94,43 +94,48 @@ comme obtenu même si la run actuelle ne le mériterait plus (ex: PIGEON,
 
 Même la source externe (zexk/bbtracker) liste ça comme question ouverte
 non résolue ("whether emblem predicates run only at results or maintain
-cached state") — pas de réponse toute faite disponible.
+cached state"). Premier essai (union des prédicats évalués sur les slots
+**terminés** uniquement) donnait 8 emblèmes pour l'utilisateur, mais il a
+vérifié en jeu qu'il en avait **22** — écart trop grand pour être expliqué
+par de simples parties dont le fichier de save aurait été écrasé.
 
-**Solution trouvée sans avoir besoin de casser `MGS4SYS.SAV`** : chaque
-slot de sauvegarde garde en mémoire les stats *au moment où cette partie a
-été jouée*. Un slot qui a atteint la fin du jeu (`stage_code == "s00a10l"`,
-"Épilogue : cimetière") a forcément déjà eu ses emblèmes évalués et
-accordés avec exactement les stats qu'on peut lire dans son fichier. Il
-suffit donc de :
+**Méthode gagnante** : l'utilisateur a donné la liste exacte de ses 22
+emblèmes obtenus (par numéro). À partir de cette liste, calcul d'un
+bitmask théorique de 5 octets (40 bits, bit0=embleme1, LSB en premier) et
+recherche de cette séquence exacte d'octets dans le fichier déchiffré —
+**trouvée du premier coup, correspondance parfaite, à l'offset `0x18` de
+`MGS4.SAV`**. Confirmé sur les 5 slots disponibles, avec une progression
+chronologique cohérente :
 
-1. Filtrer les slots réellement **terminés** (`is_completed_playthrough()`)
-   — indispensable : un slot fraîchement commencé a des stats à 0 partout,
-   ce qui le fait *qualifier à tort* pour plein d'emblèmes bas-seuil
-   (BIG BOSS, PIGEON, SCORPION...) jamais réellement accordés puisque la
-   partie n'a jamais été finie. Vérifié empiriquement : sans ce filtre,
-   deux saves de test tout juste créées (Big Boss/Extreme) "débloquaient"
-   à tort 8-10 emblèmes chacune.
-2. Calculer les emblèmes éligibles sur *chacun* de ces slots terminés
-   séparément, puis faire l'**union** de tous les IDs obtenus.
+| Slot | Bitmask (hex) | Emblèmes |
+|------|---------------|----------|
+| `903CC9` (1ère partie terminée) | `0022008200` | {10,14,26,32} |
+| `919CFF` (2e partie terminée) | `f022008200` | {5,6,7,8,10,14,26,32} |
+| `944D92`/`944EE9` (saves de test créées après) | `f022008200` | identique à 919CFF — copié tel quel à la création du slot |
+| `91DA17` (partie en cours, la plus avancée) | `f032f6fbc0` | les 22 emblèmes |
 
-Validé sur les 2 vraies parties terminées de l'utilisateur : `903CC9`
-(SOLID NORMAL) → {10,14,26,32} ; `919CFF` (LIQUID FACILE) → {5,6,7,8,14,32}.
-Union = {5,6,7,8,10,14,26,32}, cohérent avec des runs propres et rapides
-(peu d'alertes/continues, bon score CQC/headshots). Aucune fausse
-qualification de save fraîche mélangée dedans.
+Le registre est bien **cumulatif** (chaque nouvelle partie ajoute des bits,
+n'en retire jamais) et **copié dans chaque nouveau slot de sauvegarde** au
+moment de sa création (les 2 slots de test ont hérité du bitmask de
+919CFF telle quelle). Fait intéressant : `91DA17` a des emblèmes en plus
+qui ne sont accordés ni par 903CC9 ni par 919CFF pris isolément ni par ses
+propres stats en tant que partie non terminée — ça montre que le jeu
+accorde bien des emblèmes **en cours de route** (probablement à chaque
+écran de bilan d'Acte), pas seulement à l'écran de résultats final comme
+supposé au départ.
 
-Fonctions : `is_completed_playthrough(mgs4_sav_path)` et
-`compute_lifetime_emblems(slot_paths)` dans `mgs4save.py`. L'interface
-affiche 3 états par badge : obtenu à vie (doré plein), serait obtenu en
-terminant la run actuelle maintenant mais pas encore obtenu ailleurs
-(contour doré), verrouillé (gris).
+Fonctions dans `mgs4save.py` : `read_obtained_emblems(mgs4_sav_path)`
+(lit directement le bitmask, aucun calcul de prédicat nécessaire) et
+`compute_lifetime_emblems(slot_paths)` (union sur tous les slots, par
+sécurité). L'interface affiche 3 états par badge : obtenu à vie (doré
+plein, lu depuis le bitmask), serait *en plus* obtenu en terminant la run
+actuelle maintenant (contour doré, calculé via les prédicats sur les
+stats live), verrouillé (gris).
 
-**Limite connue** : si l'utilisateur a supprimé/écrasé une save qui avait
-servi à obtenir un emblème (plus aucun slot disque ne prouve cette
-completion), cet emblème disparaîtra de notre calcul même s'il est
-toujours affiché comme obtenu par le jeu lui-même (qui a peut-être un
-vrai registre persistant ailleurs, non retrouvé). Pas de solution pour
-ce cas sans localiser le vrai stockage dans `MGS4SYS.SAV`.
+Les fonctions `is_completed_playthrough()` / filtrage par `stage_code`
+utilisées dans la version précédente ne sont plus nécessaires pour cette
+partie-là (gardées dans `read_progress_info()` pour l'affichage
+lieu/Acte, qui reste utile par ailleurs).
 
 ### Petits compléments trouvés en creusant le dépôt bbtracker en detail
 

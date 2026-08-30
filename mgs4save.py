@@ -320,28 +320,34 @@ EMBLEMS = [
 ]
 
 
-ENDING_STAGE_CODE = "s00a10l"  # "Epilogue : cimetiere" - seul stage atteint par une partie reellement terminee
+EMBLEM_BITMASK_OFFSET = 0x18  # u8[5], 40 bits, LSB=emblem 1, carry-forward cumulatif
 
 
-def is_completed_playthrough(mgs4_sav_path: str) -> bool:
-    """Vrai seulement si ce slot a effectivement atteint la fin du jeu (et
-    non pas juste des stats basses parce que la partie vient de commencer -
-    voir notes.md, sinon des saves fraiches "qualifient" a tort pour des
-    emblemes bas-seuil jamais reellement accordes)."""
-    return read_progress_info(mgs4_sav_path)["stage_code"] == ENDING_STAGE_CODE
+def read_obtained_emblems(mgs4_sav_path: str) -> set[int]:
+    """Registre reel et persistant des emblemes deja obtenus, lu directement
+    depuis MGS4.SAV (bitmask 5 octets a 0x18, bit0=embleme1). Trouve par
+    correlation directe : l'utilisateur a donne la liste exacte de ses 22
+    emblemes obtenus, le bitmask calcule a partir de cette liste correspond
+    OCTET POUR OCTET a ce qui est stocke a cet offset - confirme sur les 5
+    slots disponibles, y compris la progression cumulative entre parties
+    successives (voir notes.md). Aucun besoin de recalculer les predicats
+    pour ce qui est deja obtenu : c'est ecrit tel quel dans le fichier."""
+    with open(mgs4_sav_path, "rb") as f:
+        data = decrypt(f.read())
+    value = int.from_bytes(data[EMBLEM_BITMASK_OFFSET:EMBLEM_BITMASK_OFFSET + 5], "little")
+    return {i + 1 for i in range(40) if value & (1 << i)}
 
 
 def compute_lifetime_emblems(slot_paths: list[tuple[str, str]]) -> set[int]:
-    """Emblemes reellement obtenus a vie : union des emblemes eligibles sur
-    chaque slot **effectivement termine** uniquement (le jeu ne les accorde
-    qu'a l'ecran de resultats final). slot_paths : liste de
-    (mgs4_sav_path, metadata_path)."""
+    """Union du registre reel (bitmask 0x18) de tous les slots disponibles.
+    En pratique le slot le plus recemment joue porte deja le sur-ensemble
+    (le registre est copie/cumule vers l'avant), mais unioner tous les
+    slots est sans risque et protege contre un cas limite non identifie.
+    slot_paths : liste de (mgs4_sav_path, metadata_path) - metadata_path
+    n'est pas utilise ici, garde pour compatibilite d'appel."""
     obtained: set[int] = set()
-    for mgs4_sav_path, metadata_path in slot_paths:
-        if not is_completed_playthrough(mgs4_sav_path):
-            continue
-        emblems = compute_emblems(mgs4_sav_path, metadata_path)
-        obtained |= {e["id"] for e in emblems if e["unlocked"]}
+    for mgs4_sav_path, _metadata_path in slot_paths:
+        obtained |= read_obtained_emblems(mgs4_sav_path)
     return obtained
 
 
