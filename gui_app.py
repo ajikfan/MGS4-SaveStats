@@ -26,6 +26,8 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QSplitter,
+    QTabWidget,
+    QDialog,
 )
 
 import mgs4save
@@ -156,6 +158,13 @@ QPushButton { background: rgba(255,255,255,20); color: #e8e8e8; border: 1px soli
 QPushButton:hover { background: rgba(255,255,255,40); }
 QFrame#card { background: rgba(15,15,17,170); border: 1px solid rgba(255,255,255,25); }
 QSplitter::handle { background: rgba(255,255,255,20); }
+QTabWidget::pane { border: 1px solid rgba(255,255,255,25); background: transparent; }
+QTabBar::tab { background: rgba(255,255,255,15); color: #b0b0b0; padding: 8px 18px; border: 1px solid rgba(255,255,255,25); }
+QTabBar::tab:selected { background: rgba(201,162,75,40); color: #f0f0f0; border-color: #c9a24b; }
+QPushButton#emblemLocked { background: rgba(255,255,255,10); color: #6a6a6a; border: 1px solid rgba(255,255,255,25); font-weight: 600; }
+QPushButton#emblemLocked:hover { background: rgba(255,255,255,25); }
+QPushButton#emblemUnlocked { background: rgba(201,162,75,35); color: #f0f0f0; border: 1px solid #c9a24b; font-weight: 700; }
+QPushButton#emblemUnlocked:hover { background: rgba(201,162,75,55); }
 """
 
 
@@ -295,6 +304,82 @@ class StatsPanel(QWidget):
         return card
 
 
+class EmblemDialog(QDialog):
+    def __init__(self, emblem, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Emblème {emblem['id']} — {emblem['name']}")
+        layout = QVBoxLayout(self)
+
+        status = QLabel("Débloqué (avec les stats actuelles)" if emblem["unlocked"] else "Pas encore débloqué")
+        status.setObjectName("subtitle" if emblem["unlocked"] else "placeholder")
+        layout.addWidget(status)
+
+        req_title = QLabel("CONDITION")
+        req_title.setObjectName("groupTitle")
+        layout.addWidget(req_title)
+
+        req = QLabel(emblem["requirement"])
+        req.setWordWrap(True)
+        layout.addWidget(req)
+
+        close_btn = QPushButton("Fermer")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn)
+
+        self.setMinimumWidth(360)
+
+
+class EmblemsPanel(QWidget):
+    COLUMNS = 6
+
+    def __init__(self):
+        super().__init__()
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 20, 20, 20)
+
+        header = QLabel("ÉMBLÈMES")
+        header.setObjectName("title")
+        outer.addWidget(header)
+
+        self.subtitle = QLabel(
+            "Estimation avec les stats actuelles — le jeu ne les attribue réellement\n"
+            "qu'à l'écran de résultats final. Clique sur un emblème pour sa condition."
+        )
+        self.subtitle.setObjectName("placeholder")
+        outer.addWidget(self.subtitle)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        content = QWidget()
+        self.grid = QGridLayout(content)
+        self.grid.setSpacing(8)
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
+        self.placeholder = QLabel("Sélectionne une sauvegarde dans la liste à gauche.")
+        self.placeholder.setObjectName("placeholder")
+        outer.addWidget(self.placeholder)
+
+    def show_slot(self, slot):
+        self.placeholder.hide()
+        while self.grid.count():
+            child = self.grid.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        emblems = mgs4save.compute_emblems(slot.mgs4_sav, slot.metadata_sav)
+        for i, emblem in enumerate(emblems):
+            btn = QPushButton(f"{emblem['id']:02d}\n{emblem['name']}")
+            btn.setObjectName("emblemUnlocked" if emblem["unlocked"] else "emblemLocked")
+            btn.setMinimumSize(130, 64)
+            btn.clicked.connect(lambda _checked=False, e=emblem: self._show_dialog(e))
+            self.grid.addWidget(btn, i // self.COLUMNS, i % self.COLUMNS)
+
+    def _show_dialog(self, emblem):
+        EmblemDialog(emblem, self).exec()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -310,8 +395,12 @@ class MainWindow(QMainWindow):
         splitter = QSplitter()
         self.list_panel = SlotListPanel(self.show_stats, self.change_folder)
         self.stats_panel = StatsPanel()
+        self.emblems_panel = EmblemsPanel()
+        tabs = QTabWidget()
+        tabs.addTab(self.stats_panel, "Stats")
+        tabs.addTab(self.emblems_panel, "Emblèmes")
         splitter.addWidget(self.list_panel)
-        splitter.addWidget(self.stats_panel)
+        splitter.addWidget(tabs)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([480, 720])
@@ -351,6 +440,7 @@ class MainWindow(QMainWindow):
 
     def show_stats(self, slot):
         self.stats_panel.show_slot(slot)
+        self.emblems_panel.show_slot(slot)
 
 
 def main():

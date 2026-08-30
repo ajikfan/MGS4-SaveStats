@@ -202,6 +202,142 @@ def read_stats(path: str) -> dict:
     return values
 
 
+def count_acquired_weapons(path: str) -> int:
+    """Nombre d'armes acquises (etat 1 ou 2), IDs 1..73 en excluant l'ID 11
+    (1911 Custom, optionnel) - formule exacte pour l'emblème LITTLE GRAY,
+    source zexk/bbtracker. Tableau complet a 0x1d4 (u16[95], IDs 0..94)."""
+    with open(path, "rb") as f:
+        data = decrypt(f.read())
+    count = 0
+    for weapon_id in range(1, 74):
+        if weapon_id == 11:
+            continue
+        state = struct.unpack_from("<H", data, 0x1d4 + 2 * weapon_id)[0]
+        if state in (1, 2):
+            count += 1
+    return count
+
+
+# Les 40 formules d'emblemes de fin de partie (source zexk/bbtracker,
+# docs/mgs4_research.md, section "Emblem predicates" - extraite du script
+# ww/stage/stage00/s00a10l/cache/00180720.gcx). Le jeu ne les evalue qu'a
+# l'ecran de resultats final ; ici on calcule "serait obtenu avec l'etat
+# actuel des stats", comme le fait le trainer communautaire cite en source.
+# Chaque predicat recoit un contexte : stats (dict de read_stats()),
+# playtime_h (temps de jeu total en heures), difficulty_score (0x30 de
+# METADATA.SAV), weapon_count (count_acquired_weapons()).
+EMBLEMS = [
+    (1, "BIG BOSS", "Extrême ; alertes/kills/continues/soins = 0 ; ≤5h ; aucun objet spécial",
+     lambda c: c["difficulty_score"] == 50 and c["stats"]["alertes"] == 0 and c["stats"]["kills_total"] == 0
+     and c["stats"]["continues"] == 0 and c["stats"]["soins_utilises"] == 0 and c["playtime_h"] <= 5
+     and c["stats"]["objets_speciaux_bitmask"] == 0),
+    (2, "FOX HOUND", "Difficile ou + ; alertes ≤3 ; kills/continues/soins = 0 ; ≤5h30 ; aucun objet spécial",
+     lambda c: c["difficulty_score"] >= 40 and c["stats"]["alertes"] <= 3 and c["stats"]["kills_total"] == 0
+     and c["stats"]["continues"] == 0 and c["stats"]["soins_utilises"] == 0 and c["playtime_h"] <= 5.5
+     and c["stats"]["objets_speciaux_bitmask"] == 0),
+    (3, "FOX", "Solid Normal ou + ; alertes ≤5 ; kills/continues/soins = 0 ; ≤6h ; aucun objet spécial",
+     lambda c: c["difficulty_score"] >= 35 and c["stats"]["alertes"] <= 5 and c["stats"]["kills_total"] == 0
+     and c["stats"]["continues"] == 0 and c["stats"]["soins_utilises"] == 0 and c["playtime_h"] <= 6
+     and c["stats"]["objets_speciaux_bitmask"] == 0),
+    (4, "HOUND", "Naked Normal ou + ; alertes ≤10 ; kills/continues/soins = 0 ; ≤6h30 ; aucun objet spécial",
+     lambda c: c["difficulty_score"] >= 30 and c["stats"]["alertes"] <= 10 and c["stats"]["kills_total"] == 0
+     and c["stats"]["continues"] == 0 and c["stats"]["soins_utilises"] == 0 and c["playtime_h"] <= 6.5
+     and c["stats"]["objets_speciaux_bitmask"] == 0),
+    (5, "MANTIS", "Alertes/continues/soins = 0 ; ≤5h",
+     lambda c: c["stats"]["alertes"] == 0 and c["stats"]["continues"] == 0 and c["stats"]["soins_utilises"] == 0
+     and c["playtime_h"] <= 5),
+    (6, "WOLF", "Continues/soins = 0",
+     lambda c: c["stats"]["continues"] == 0 and c["stats"]["soins_utilises"] == 0),
+    (7, "RAVEN", "≤5h de jeu",
+     lambda c: c["playtime_h"] <= 5),
+    (8, "OCTOPUS", "0 alerte",
+     lambda c: c["stats"]["alertes"] == 0),
+    (9, "BEAR", "≥100 utilisations de CQC",
+     lambda c: c["stats"]["cqc"] >= 100),
+    (10, "EAGLE", "≥150 headshots",
+     lambda c: c["stats"]["headshots"] >= 150),
+    (11, "ASSASSIN", "≥50 neutralisations au couteau ; ≥50 CQC ; ≤25 alertes",
+     lambda c: c["stats"]["ko_couteau"] >= 50 and c["stats"]["cqc"] >= 50 and c["stats"]["alertes"] <= 25),
+    (12, "PIGEON", "0 kill",
+     lambda c: c["stats"]["kills_total"] == 0),
+    (13, "BLUE BIRD", "≥50 objets donnés aux milices",
+     lambda c: c["stats"]["objets_donnes_milices"] >= 50),
+    (14, "HAWK", "≥25 compliments reçus",
+     lambda c: c["stats"]["praises"] >= 25),
+    (15, "LITTLE GRAY", "≥69 armes acquises (sur 73, hors 1911 Custom optionnel)",
+     lambda c: c["weapon_count"] >= 69),
+    (16, "ANT", "≥50 fouilles corporelles",
+     lambda c: c["stats"]["body_searches"] >= 50),
+    (17, "GIBBON", "≥50 hold-ups",
+     lambda c: c["stats"]["holdups"] >= 50),
+    (18, "TORTOISE", "≥60 min dans un carton/baril",
+     lambda c: c["stats"]["temps_carton_frames"] / 3600 >= 60),
+    (19, "RABBIT", "≥100 pages de magazine tournées",
+     lambda c: c["stats"]["pages_magazine_tournees"] >= 100),
+    (20, "BEE", "≥50 utilisations de seringue/Scanning Plug",
+     lambda c: c["stats"]["seringue_scanning_plug"] >= 50),
+    (21, "GECKO", "≥60 min contre un mur",
+     lambda c: c["stats"]["temps_mur_frames"] / 3600 >= 60),
+    (22, "SCARAB", "≥100 roulades de côté",
+     lambda c: c["stats"]["roulades_cote"] >= 100),
+    (23, "FROG", "≥200 roulades en avant",
+     lambda c: c["stats"]["roulades_avant"] >= 200),
+    (24, "INCH WORM", "≥60 min allongé/à ramper",
+     lambda c: c["stats"]["temps_allonge_frames"] / 3600 >= 60),
+    (25, "LOBSTER", "≥150 min accroupi",
+     lambda c: c["stats"]["temps_accroupi_frames"] / 3600 >= 150),
+    (26, "HYENA", "≥400 armes/objets ramassés",
+     lambda c: c["stats"]["armes_objets_acquis"] >= 400),
+    (27, "HOG", "≥10 poussées d'adrénaline",
+     lambda c: c["stats"]["combat_high"] >= 10),
+    (28, "PIG", "≥40 objets de soin utilisés",
+     lambda c: c["stats"]["soins_utilises"] >= 40),
+    (29, "COW", "≥100 alertes",
+     lambda c: c["stats"]["alertes"] >= 100),
+    (30, "CROCODILE", "≥400 kills",
+     lambda c: c["stats"]["kills_total"] >= 400),
+    (31, "GIANT PANDA", "≥30h de jeu",
+     lambda c: c["playtime_h"] >= 30),
+    (32, "SCORPION", "≤75 alertes ; ≤250 kills ; ≤25 continues",
+     lambda c: c["stats"]["alertes"] <= 75 and c["stats"]["kills_total"] <= 250 and c["stats"]["continues"] <= 25),
+    (33, "TARANTULA", "≤75 alertes ; >250 kills ; ≤25 continues",
+     lambda c: c["stats"]["alertes"] <= 75 and c["stats"]["kills_total"] > 250 and c["stats"]["continues"] <= 25),
+    (34, "CENTIPEDE", "≤75 alertes ; ≤250 kills ; >25 continues",
+     lambda c: c["stats"]["alertes"] <= 75 and c["stats"]["kills_total"] <= 250 and c["stats"]["continues"] > 25),
+    (35, "SPIDER", "≤75 alertes ; >250 kills ; >25 continues",
+     lambda c: c["stats"]["alertes"] <= 75 and c["stats"]["kills_total"] > 250 and c["stats"]["continues"] > 25),
+    (36, "JAGUAR", ">75 alertes ; ≤250 kills ; ≤25 continues",
+     lambda c: c["stats"]["alertes"] > 75 and c["stats"]["kills_total"] <= 250 and c["stats"]["continues"] <= 25),
+    (37, "PANTHER", ">75 alertes ; >250 kills ; ≤25 continues",
+     lambda c: c["stats"]["alertes"] > 75 and c["stats"]["kills_total"] > 250 and c["stats"]["continues"] <= 25),
+    (38, "LEOPARD", ">75 alertes ; ≤250 kills ; >25 continues",
+     lambda c: c["stats"]["alertes"] > 75 and c["stats"]["kills_total"] <= 250 and c["stats"]["continues"] > 25),
+    (39, "PUMA", ">75 alertes ; >250 kills ; >25 continues",
+     lambda c: c["stats"]["alertes"] > 75 and c["stats"]["kills_total"] > 250 and c["stats"]["continues"] > 25),
+    (40, "CHICKEN", "≥150 alertes ; ≥500 kills ; ≥50 continues ; ≥50 soins ; ≥35h",
+     lambda c: c["stats"]["alertes"] >= 150 and c["stats"]["kills_total"] >= 500 and c["stats"]["continues"] >= 50
+     and c["stats"]["soins_utilises"] >= 50 and c["playtime_h"] >= 35),
+]
+
+
+def compute_emblems(mgs4_sav_path: str, metadata_path: str) -> list[dict]:
+    """Retourne les 40 emblemes avec leur statut "serait obtenu maintenant"
+    au vu des stats actuelles (le jeu ne les evalue reellement qu'a l'ecran
+    de resultats final - voir notes.md)."""
+    stats = read_stats(mgs4_sav_path)
+    meta = read_metadata_summary(metadata_path)
+    context = {
+        "stats": stats,
+        "playtime_h": meta["playtime_secondes"] / 3600,
+        "difficulty_score": meta["difficulte_score"],
+        "weapon_count": count_acquired_weapons(mgs4_sav_path),
+    }
+    return [
+        {"id": eid, "name": name, "requirement": req, "unlocked": bool(predicate(context))}
+        for eid, name, req, predicate in EMBLEMS
+    ]
+
+
 def find_value(data: bytes, value: int, region: tuple[int, int] | None = None):
     """Cherche `value` encodé en u8/u16/u32/i32 (LE et BE) dans `data`.
 
