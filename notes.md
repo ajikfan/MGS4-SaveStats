@@ -143,16 +143,23 @@ l'utilisateur) :
 - `0x38` (u32) = **numéro de partie** (l'étoile). Correspondance exacte et
   sans ambiguïté sur les 3 slots (1, 2, 3). Confiance haute.
   Fonction : `read_playthrough_number(metadata_path)`.
-- `0x30` (u32) = **score de difficulté interne** (pas un simple 0-5) :
-  LIQUID FACILE=20, NAKED NORMAL=30, SOLID NORMAL=35, BIG BOSS DIFFICILE=50
-  (confirmé sur un save frais créé exprès par l'utilisateur, slot
-  `BLJM67001G6A944D92`). Les 5 niveaux officiels du jeu, dans l'ordre
-  (capture d'écran du menu de sélection) : LIQUID FACILE, NAKED NORMAL,
-  SOLID NORMAL, BIG BOSS DIFFICILE, THE BOSS EXTRÊME. Pas de formule
-  linéaire évidente (20, 30, 35, 50), donc THE BOSS EXTRÊME ne peut pas
-  être extrapolé — il faudrait un save dans cette dernière difficulté pour
-  compléter la table `DIFFICULTY_NAMES` dans `mgs4save.py`. Confiance haute
-  pour les 4 valeurs connues, la 5e reste à trouver.
+- `0x30` (u32) = **score de difficulté interne**. Table complète, les 5
+  niveaux officiels confirmés chacun sur un save dédié :
+
+  | Score | Difficulté |
+  |-------|------------|
+  | 20 | LIQUID FACILE |
+  | 30 | NAKED NORMAL |
+  | 35 | SOLID NORMAL |
+  | 40 | BIG BOSS DIFFICILE |
+  | 50 | THE BOSS EXTRÊME |
+
+  Pas un simple 0-4 mais pas non plus totalement arbitraire (pas +10, +5,
+  +5, +10). Confiance haute, table complète dans `DIFFICULTY_NAMES`
+  (`mgs4save.py`). Attention : un premier test avait mal étiqueté le save
+  944D92 comme "BIG BOSS DIFFICILE" alors que c'était "THE BOSS EXTRÊME" —
+  corrigé après vérification par l'utilisateur avec un save dédié
+  (`BLJM67001G6A944EE9`) pour BIG BOSS DIFFICILE.
 
 ### MGS4SYS.SAV (fichier système, partagé entre tous les slots)
 
