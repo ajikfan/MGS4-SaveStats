@@ -8,7 +8,7 @@ aucune ecriture dans les fichiers de save.
 import os
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -166,7 +166,7 @@ class SlotListPanel(QWidget):
         layout.addWidget(title)
 
         self.list_widget = QListWidget()
-        self.list_widget.setIconSize(self.list_widget.iconSize() * 3)
+        self.list_widget.setIconSize(QSize(140, 79))  # ratio 16:9, taille ICON0.PNG du jeu
         self.list_widget.currentItemChanged.connect(
             lambda current, _prev: current and on_selection_changed(current.data(Qt.UserRole))
         )
@@ -282,7 +282,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.stats_panel)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([380, 820])
+        splitter.setSizes([480, 720])
         bg_layout.addWidget(splitter)
 
         self.refresh_slots()
