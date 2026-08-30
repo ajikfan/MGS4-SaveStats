@@ -91,6 +91,22 @@ def read_difficulty_score(metadata_path: str) -> int:
     return struct.unpack_from("<I", data, 0x30)[0]
 
 
+def read_metadata_summary(metadata_path: str) -> dict:
+    """Resume rapide d'un slot depuis METADATA.SAV seul (pas de dechiffrement
+    necessaire) : suffisant pour un ecran de liste sans ouvrir MGS4.SAV."""
+    with open(metadata_path, "rb") as f:
+        data = f.read()
+    difficulty_score = struct.unpack_from("<I", data, 0x30)[0]
+    return {
+        "playtime_secondes": struct.unpack_from("<I", data, 0x34)[0],
+        "numero_partie": struct.unpack_from("<I", data, 0x38)[0],
+        "difficulte_score": difficulty_score,
+        "difficulte_nom": DIFFICULTY_NAMES.get(difficulty_score, f"inconnu ({difficulty_score})"),
+        "drebin_actuel": struct.unpack_from("<I", data, 0x3c)[0],
+        "objets_donnes_milices": struct.unpack_from("<I", data, 0x40)[0],
+    }
+
+
 def read_stats(path: str) -> dict:
     with open(path, "rb") as f:
         data = decrypt(f.read())

@@ -1,3 +1,6 @@
 samples/
 __pycache__/
 *.pyc
+themes/*.jpg
+themes/*.png
+!themes/README.md
