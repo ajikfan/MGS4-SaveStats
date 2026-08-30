@@ -99,7 +99,9 @@ def seconds_to_hms(seconds) -> str:
 
 
 def frames_to_hms_approx(frames) -> str:
-    return "≈ " + seconds_to_hms(frames / FRAMES_PER_SECOND)
+    # Pas de symbole "environ" affiche a la demande de l'utilisateur, mais la
+    # valeur reste approximative (framerate variable, voir notes.md).
+    return seconds_to_hms(frames / FRAMES_PER_SECOND)
 
 
 def format_stat_value(key: str, value) -> str:
@@ -232,7 +234,7 @@ class StatsPanel(QWidget):
             for group_name, fields in STAT_GROUPS
         ]
 
-        time_rows = [("Temps de jeu total (± 30s)", seconds_to_hms(meta["playtime_secondes"]))]
+        time_rows = [("Temps de jeu total", seconds_to_hms(meta["playtime_secondes"]))]
         time_rows += [(label, format_stat_value(key, stats.get(key, 0))) for key, label in TIME_FIELDS]
         cards.append(self._build_card("Temps", time_rows))
 
