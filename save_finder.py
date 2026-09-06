@@ -19,6 +19,7 @@ SAVE_SUBPATH = os.path.join(APP_NAME, "mgs4_savedata_win")
 class SaveSlot:
     slot_id: str
     path: str
+    imported: bool = False  # save chargee ponctuellement depuis un dossier externe (pas Steam)
 
     @property
     def mgs4_sav(self):
@@ -106,3 +107,20 @@ def find_all_slots():
     if not root:
         return []
     return list_save_slots(root)
+
+
+def find_slots_in_any_folder(folder):
+    """Cherche des slots de sauvegarde n'importe ou sous `folder`, sans
+    supposer la structure exacte Steam (steamid/mgs4/slot_id/). Pour
+    importer ponctuellement une save recue par un tiers (cle USB, email...)
+    qui peut avoir ete recompressee/reorganisee. Un dossier est un slot des
+    qu'il contient a la fois MGS4.SAV et METADATA.SAV (recherche
+    insensible a la casse - Windows resout les noms de fichiers reels sans
+    egard a la casse de toute facon). L'ID du slot est le nom du dossier
+    qui les contient."""
+    slots = []
+    for dirpath, _dirnames, filenames in os.walk(folder):
+        names_lower = {f.lower() for f in filenames}
+        if "mgs4.sav" in names_lower and "metadata.sav" in names_lower:
+            slots.append(SaveSlot(slot_id=os.path.basename(dirpath), path=dirpath, imported=True))
+    return slots
