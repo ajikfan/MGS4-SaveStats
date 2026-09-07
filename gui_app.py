@@ -44,8 +44,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.2"
+APP_VERSION = "V4.3"
 APP_CHANGELOG = [
+    ("V4.3", "7 septembre 2026", "Nouvelle fonctionnalité : comparer sa sauvegarde actuelle à n'importe quelle autre. Sur tous les onglets, rouge = possédé ici mais pas sur la sauvegarde de comparaison, vert = l'inverse. La sauvegarde de comparaison est mise en évidence dans la liste, et le sélecteur reprend le même format (vignette, difficulté, temps de jeu...) que la liste principale."),
     ("V4.2", "7 septembre 2026", "Correction de deux identifications inversées (Lunette de fusil / Sachet à gaz somnifère) suite à des tests isolés. Le Silencieux M4 n'affiche plus le point rouge \"verrouillé chez Drebin\" à tort (il reste parfois à l'état verrouillé en données tout en étant déjà utilisable en jeu)."),
     ("V4.1", "6 septembre 2026", "Correction d'un bug d'affichage : les fenêtres de détail (chansons, emblèmes, aide...) s'affichaient avec un fond blanc au lieu du thème sombre sur certaines configurations Windows (le fond n'était appliqué explicitement qu'à la fenêtre principale, pas aux fenêtres secondaires)."),
     ("V4.0", "6 septembre 2026", "Nouvelle fonctionnalité : import ponctuel d'une sauvegarde externe (clé USB, email...) en plus des siennes, sans la copier. Onglet Armes : point rouge sur les armes/accessoires acquis mais verrouillés chez Drebin, refonte complète des catégories (renommées et recomptées via un guide d'inventaire officiel). Compteurs canoniques corrigés sur les onglets Objets, OctoCamo (fusion de l'ancienne section \"Camouflages spéciaux\", désormais 21 motifs) et Gilets. Ajout des récompenses d'emblèmes dans leur popup de détail. Nouvelles conditions de déblocage pour plusieurs chansons, et divers ajustements de texte."),
@@ -237,6 +238,22 @@ def format_stat_value(key: str, value) -> str:
     return str(value)
 
 
+def format_stat_delta(key: str, value_before, value_after) -> str:
+    """Suffixe " (+N)"/" (-N)" pour le mode comparaison. Pas de delta
+    pertinent pour un booleen (bitmask) - tout le reste est un compteur ou
+    un solde, une difference brute a du sens meme pour Drebin (qui peut
+    baisser en depensant)."""
+    if key == "objets_speciaux_bitmask" or value_after == value_before:
+        return ""
+    delta = value_after - value_before
+    sign = "+" if delta > 0 else "-"
+    if key in FRAME_FIELDS:
+        return f" ({sign}{frames_to_hms_approx(abs(delta))})"
+    if key in DREBIN_FIELDS:
+        return f" ({sign}{abs(delta):,})".replace(",", " ")
+    return f" ({sign}{abs(delta)})"
+
+
 DARK_QSS = """
 QMainWindow, QWidget#root, QDialog { background-color: #0b0b0c; }
 QLabel { color: #d8d8d8; }
@@ -254,6 +271,7 @@ QListWidget { background: transparent; border: none; }
 QListWidget::item { background: rgba(20,20,22,190); border: 1px solid rgba(255,255,255,30); margin: 4px 8px; padding: 0px; }
 QListWidget::item:selected { border: 1px solid #c9a24b; background: rgba(40,35,20,200); }
 QWidget#slotRow { background: transparent; }
+QWidget#slotRowCompareTarget { background: rgba(90,180,110,30); border: 2px solid #6fcf87; border-radius: 4px; }
 QPushButton#deleteSlotLink { background: rgba(10,10,10,235); color: #d08080; border: 1px solid rgba(255,255,255,25); border-radius: 3px; font-size: 11px; padding: 3px 8px; }
 QPushButton#deleteSlotLink:hover { color: #ff6b6b; background: rgba(30,10,10,235); }
 QPushButton#dangerButton { background: rgba(140,30,30,180); color: #ffffff; border: 1px solid #c94b4b; font-weight: 700; padding: 6px 16px; }
@@ -269,6 +287,10 @@ QPushButton#collectionOwned { background: rgba(255,255,255,25); color: #ffffff; 
 QPushButton#collectionOwned:hover { background: rgba(255,255,255,40); }
 QPushButton#collectionLocked { background: rgba(255,255,255,10); color: #808080; border: 1px solid rgba(255,255,255,30); font-weight: 500; }
 QPushButton#collectionLocked:hover { background: rgba(255,255,255,20); }
+QPushButton#collectionOnlyCompare { background: rgba(90,180,110,80); color: #ffffff; border: 2px solid #6fcf87; font-weight: 700; }
+QPushButton#collectionOnlyCompare:hover { background: rgba(90,180,110,110); }
+QPushButton#collectionOnlyHere { background: rgba(200,80,80,80); color: #ffffff; border: 2px solid #e08080; font-weight: 700; }
+QPushButton#collectionOnlyHere:hover { background: rgba(200,80,80,110); }
 QPushButton#emblemUnlocked { background: rgba(201,162,75,150); color: #ffffff; border: 2px solid #f0cd7a; font-weight: 700; }
 QPushButton#emblemUnlocked:hover { background: rgba(201,162,75,180); }
 QPushButton#emblemUnlockedPrevious { background: rgba(201,162,75,150); color: #ffffff; border: 2px solid transparent; font-weight: 700; }
@@ -288,9 +310,14 @@ class SlotRowWidget(QWidget):
     page) au-dessus du coin bas-droit, pour ne jamais decaler le contenu
     quand il apparait/disparait au survol."""
 
-    def __init__(self, slot, label_text, on_delete):
+    def __init__(self, slot, label_text, on_delete=None, is_compare_target=False):
         super().__init__()
-        self.setObjectName("slotRow")
+        self.label_text = label_text
+        self.setObjectName("slotRowCompareTarget" if is_compare_target else "slotRow")
+        # Necessaire pour qu'un QWidget "nu" (pas de peinture personnalisee)
+        # respecte les regles QSS background/border - sans ça, la bordure
+        # verte de "slotRowCompareTarget" est definie mais jamais dessinee.
+        self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(10)
@@ -320,16 +347,22 @@ class SlotRowWidget(QWidget):
         # Parent = self mais PAS ajoute au layout : flotte en superposition,
         # positionne a la main (voir _position_delete_btn), sans reserver
         # d'espace ni decaler le reste quand il apparait/disparait.
-        self.delete_btn = QPushButton("Supprimer", self)
-        self.delete_btn.setObjectName("deleteSlotLink")
-        self.delete_btn.setFlat(True)
-        self.delete_btn.setCursor(Qt.PointingHandCursor)
-        self.delete_btn.setToolTip("Envoyer cette sauvegarde à la Corbeille")
-        self.delete_btn.setVisible(False)
-        self.delete_btn.adjustSize()
-        self.delete_btn.clicked.connect(lambda: on_delete(slot))
+        # on_delete=None (ex. dans le picker du mode comparaison) : pas de
+        # bouton supprimer du tout, juste l'icone + le texte.
+        self.delete_btn = None
+        if on_delete is not None:
+            self.delete_btn = QPushButton("Supprimer", self)
+            self.delete_btn.setObjectName("deleteSlotLink")
+            self.delete_btn.setFlat(True)
+            self.delete_btn.setCursor(Qt.PointingHandCursor)
+            self.delete_btn.setToolTip("Envoyer cette sauvegarde à la Corbeille")
+            self.delete_btn.setVisible(False)
+            self.delete_btn.adjustSize()
+            self.delete_btn.clicked.connect(lambda: on_delete(slot))
 
     def _position_delete_btn(self):
+        if self.delete_btn is None:
+            return
         margin = 6
         btn = self.delete_btn
         btn.move(self.width() - btn.width() - margin, self.height() - btn.height() - margin)
@@ -341,18 +374,21 @@ class SlotRowWidget(QWidget):
 
     def enterEvent(self, event):
         self._position_delete_btn()
-        self.delete_btn.setVisible(True)
+        if self.delete_btn is not None:
+            self.delete_btn.setVisible(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.delete_btn.setVisible(False)
+        if self.delete_btn is not None:
+            self.delete_btn.setVisible(False)
         super().leaveEvent(event)
 
 
 class SlotListPanel(QWidget):
-    def __init__(self, on_selection_changed, on_change_folder, on_refresh, on_delete_slot, on_import_folder):
+    def __init__(self, on_selection_changed, on_change_folder, on_refresh, on_delete_slot, on_import_folder, on_toggle_compare):
         super().__init__()
         self._on_delete_slot = on_delete_slot
+        self._compare_target_path = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 10, 20)
 
@@ -374,9 +410,9 @@ class SlotListPanel(QWidget):
 
         self.list_widget = QListWidget()
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.list_widget.currentItemChanged.connect(
-            lambda current, _prev: current and on_selection_changed(current.data(Qt.UserRole))
-        )
+        self.list_widget.currentItemChanged.connect(self._on_current_item_changed)
+        self._on_selection_changed = on_selection_changed
+        self._selected_path = None
         layout.addWidget(self.list_widget)
 
         change_btn = QPushButton("Changer de dossier…")
@@ -391,17 +427,56 @@ class SlotListPanel(QWidget):
         import_btn.clicked.connect(on_import_folder)
         layout.addWidget(import_btn)
 
+        self.compare_btn = QPushButton("Comparer avec…")
+        self.compare_btn.setToolTip(
+            "Affiche en vert ce qui est nouveau sur la sauvegarde sélectionnée "
+            "par rapport à une autre sauvegarde de ton choix."
+        )
+        self.compare_btn.clicked.connect(on_toggle_compare)
+        layout.addWidget(self.compare_btn)
+
+    def _on_current_item_changed(self, current, _prev):
+        if not current:
+            return
+        slot = current.data(Qt.UserRole)
+        self._selected_path = slot.path
+        self._on_selection_changed(slot)
+
+    def set_compare_active(self, active, compare_label="", compare_path=None):
+        self.compare_btn.setText(f"Quitter la comparaison ({compare_label})" if active else "Comparer avec…")
+        self._compare_target_path = compare_path if active else None
+        self._restyle_rows()
+
+    def _restyle_rows(self):
+        """Reconstruit juste le style des lignes deja affichees (contour vert
+        sur la cible de comparaison), sans redemander les slots ni toucher a
+        la selection courante - contrairement a set_slots()."""
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            slot = item.data(Qt.UserRole)
+            old_row = self.list_widget.itemWidget(item)
+            if old_row is None:
+                continue
+            new_row = SlotRowWidget(slot, old_row.label_text, self._on_delete_slot, is_compare_target=(slot.path == self._compare_target_path))
+            self.list_widget.setItemWidget(item, new_row)
+
     def _show_help(self):
         HelpDialog(self).exec()
 
     def set_slots(self, slots_with_summary):
-        """slots_with_summary : trie par l'appelant (plus recent en premier)."""
+        """slots_with_summary : trie par l'appelant (plus recent en premier).
+        Conserve la selection courante si le meme slot est toujours present
+        (ex. apres bascule du mode comparaison), sinon retombe sur la
+        premiere ligne (ex. veritable rafraichissement/nouvelle sauvegarde)."""
         count = len(slots_with_summary)
         self.count_label.setText(
             f"({count}/{MGS4_MAX_SAVE_SLOTS} sauvegarde{'s' if count != 1 else ''})"
         )
         self.list_widget.clear()
-        for slot, summary in slots_with_summary:
+        restore_row = None
+        for i, (slot, summary) in enumerate(slots_with_summary):
+            if slot.path == self._selected_path:
+                restore_row = i
             imported_tag = "📁 IMPORTÉE\n" if slot.imported else ""
             label = (
                 f"{imported_tag}"
@@ -413,12 +488,12 @@ class SlotListPanel(QWidget):
             )
             item = QListWidgetItem()
             item.setData(Qt.UserRole, slot)
-            row = SlotRowWidget(slot, label, self._on_delete_slot)
+            row = SlotRowWidget(slot, label, self._on_delete_slot, is_compare_target=(slot.path == self._compare_target_path))
             item.setSizeHint(row.sizeHint())
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, row)
         if self.list_widget.count():
-            self.list_widget.setCurrentRow(0)
+            self.list_widget.setCurrentRow(restore_row if restore_row is not None else 0)
 
 
 class StatsPanel(QWidget):
@@ -430,6 +505,15 @@ class StatsPanel(QWidget):
         self.title = QLabel("")
         self.title.setObjectName("subtitle")
         outer.addWidget(self.title)
+
+        self.compare_hint = QLabel(
+            "Valeurs de cette sauvegarde, écarts entre parenthèses par rapport à la "
+            "sauvegarde de comparaison (+ = plus élevé ici, - = plus bas)."
+        )
+        self.compare_hint.setObjectName("placeholder")
+        self.compare_hint.setWordWrap(True)
+        self.compare_hint.hide()
+        outer.addWidget(self.compare_hint)
 
         self.placeholder = QLabel("Sélectionne une sauvegarde dans la liste à gauche.")
         self.placeholder.setObjectName("placeholder")
@@ -443,8 +527,9 @@ class StatsPanel(QWidget):
         scroll.setWidget(content)
         outer.addWidget(scroll)
 
-    def show_slot(self, slot):
+    def show_slot(self, slot, compare_slot=None):
         self.placeholder.hide()
+        self.compare_hint.setVisible(compare_slot is not None)
         while self.grid.count():
             child = self.grid.takeAt(0)
             if child.widget():
@@ -453,20 +538,40 @@ class StatsPanel(QWidget):
         stats = mgs4save.read_stats(slot.mgs4_sav)
         meta = mgs4save.read_metadata_summary(slot.metadata_sav)
         progress = mgs4save.read_progress_info(slot.mgs4_sav)
-        self.title.setText(
+        title_text = (
             f"{meta['difficulte_nom']}{format_partie_suffix(meta['numero_partie'])}\n"
             f"{format_lieu_acte(progress['lieu'], progress['acte'])}"
         )
 
+        stats_before = meta_before = None
+        if compare_slot is not None:
+            stats_before = mgs4save.read_stats(compare_slot.mgs4_sav)
+            meta_before = mgs4save.read_metadata_summary(compare_slot.metadata_sav)
+            title_text += "\nComparée à : " + format_lieu_acte(
+                mgs4save.read_progress_info(compare_slot.mgs4_sav)["lieu"],
+                mgs4save.read_progress_info(compare_slot.mgs4_sav)["acte"],
+            )
+        self.title.setText(title_text)
+
+        def value_text(key, value):
+            text = format_stat_value(key, value)
+            if stats_before is not None:
+                text += format_stat_delta(key, stats_before.get(key, 0), value)
+            return text
+
         cards = [
             self._build_card(group_name, [
-                (label, format_stat_value(key, stats.get(key, 0))) for key, label in fields
+                (label, value_text(key, stats.get(key, 0))) for key, label in fields
             ])
             for group_name, fields in STAT_GROUPS
         ]
 
-        time_rows = [("Temps de jeu total", seconds_to_hms(meta["playtime_secondes"]))]
-        time_rows += [(label, format_stat_value(key, stats.get(key, 0))) for key, label in TIME_FIELDS]
+        time_playtime = seconds_to_hms(meta["playtime_secondes"])
+        if meta_before is not None:
+            delta_s = meta["playtime_secondes"] - meta_before["playtime_secondes"]
+            time_playtime += f" ({'+' if delta_s >= 0 else '-'}{seconds_to_hms(abs(delta_s))})"
+        time_rows = [("Temps de jeu total", time_playtime)]
+        time_rows += [(label, value_text(key, stats.get(key, 0))) for key, label in TIME_FIELDS]
         cards.append(self._build_card("Temps", time_rows))
 
         battery_count = mgs4save.read_battery_count(slot.mgs4_sav)
@@ -601,6 +706,63 @@ class ConfirmDeleteDialog(QDialog):
         return self.group_checkbox is not None and self.group_checkbox.isChecked()
 
 
+class CompareSlotDialog(QDialog):
+    """Choix de la sauvegarde de reference pour le mode comparaison.
+    N'importe quel slot peut etre choisi (pas seulement ceux de la meme
+    partie) - sert justement a comparer des branches differentes."""
+
+    def __init__(self, slots_with_summary, exclude_slot, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Comparer avec quelle sauvegarde ?")
+        layout = QVBoxLayout(self)
+
+        intro = QLabel(
+            "La sauvegarde actuelle sera comparée à celle choisie ci-dessous : "
+            "tout ce qui est nouveau (armes, objets, emblèmes...) sera mis en évidence."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        for slot, summary in slots_with_summary:
+            if slot.path == exclude_slot.path:
+                continue
+            imported_tag = "📁 IMPORTÉE\n" if slot.imported else ""
+            label = (
+                f"{imported_tag}"
+                f"{summary['difficulte_nom']}{format_partie_suffix(summary['numero_partie'])}\n"
+                f"{format_lieu_acte(summary['lieu'], summary['acte'])}\n"
+                f"Temps de jeu : {seconds_to_hms(summary['playtime_secondes'])}    "
+                f"Drebin : {format_stat_value('drebin_actuel', summary['drebin_actuel'])}\n"
+                f"{summary['date_modif'].strftime('%d/%m/%Y %H:%M')}"
+            )
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, slot)
+            row = SlotRowWidget(slot, label)
+            item.setSizeHint(row.sizeHint())
+            self.list_widget.addItem(item)
+            self.list_widget.setItemWidget(item, row)
+        self.list_widget.itemDoubleClicked.connect(lambda _item: self.accept())
+        layout.addWidget(self.list_widget)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        cancel_btn = QPushButton("Annuler")
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(cancel_btn)
+        ok_btn = QPushButton("Comparer")
+        ok_btn.clicked.connect(self.accept)
+        buttons.addWidget(ok_btn)
+        layout.addLayout(buttons)
+
+        self.setMinimumSize(420, 480)
+
+    def selected_slot(self):
+        item = self.list_widget.currentItem()
+        return item.data(Qt.UserRole) if item else None
+
+
 class EmblemDialog(QDialog):
     def __init__(self, emblem, parent=None):
         super().__init__(parent)
@@ -671,12 +833,14 @@ class EmblemsPanel(QWidget):
         self.header.setObjectName("title")
         outer.addWidget(self.header)
 
-        self.subtitle = QLabel(
+        self._base_subtitle = (
             "Doré + bordure = obtenu sur cette partie. Doré sans bordure = obtenu sur une partie précédente.\n"
             "Gris + bordure = serait obtenu en terminant maintenant. Gris sans bordure = encore possible. "
             "Noir sans bordure = impossible pour cette partie. Clique pour la condition et la récompense.\n"
             "Obtenir les 40 emblèmes débloque en plus la chanson iPod \"Snake Eater\"."
         )
+        self.subtitle = QLabel(self._base_subtitle)
+        self.subtitle.setWordWrap(True)
         self.subtitle.setObjectName("placeholder")
         outer.addWidget(self.subtitle)
 
@@ -692,7 +856,7 @@ class EmblemsPanel(QWidget):
         self.placeholder.setObjectName("placeholder")
         outer.addWidget(self.placeholder)
 
-    def show_slot(self, slot):
+    def show_slot(self, slot, compare_slot=None):
         self.placeholder.hide()
         while self.grid.count():
             child = self.grid.takeAt(0)
@@ -701,7 +865,16 @@ class EmblemsPanel(QWidget):
 
         obtained_ids = mgs4save.read_obtained_emblems(slot.mgs4_sav)
         emblems = mgs4save.compute_emblems(slot.mgs4_sav, slot.metadata_sav)
-        self.header.setText(f"EMBLÈMES ({len(obtained_ids)} / {len(emblems)})")
+        obtained_ids_compare = mgs4save.read_obtained_emblems(compare_slot.mgs4_sav) if compare_slot is not None else None
+        header_text = f"EMBLÈMES ({len(obtained_ids)} / {len(emblems)})"
+        if obtained_ids_compare is not None:
+            only_here = len(obtained_ids - obtained_ids_compare)
+            only_compare = len(obtained_ids_compare - obtained_ids)
+            header_text += f" — {only_here} en rouge, {only_compare} en vert"
+        self.header.setText(header_text)
+        self.subtitle.setText(
+            f"{self._base_subtitle}\n{COMPARE_MODE_HINT}" if obtained_ids_compare is not None else self._base_subtitle
+        )
         for i, emblem in enumerate(emblems):
             emblem = dict(emblem)
             emblem["obtained"] = emblem["id"] in obtained_ids
@@ -718,8 +891,14 @@ class EmblemsPanel(QWidget):
                 emblem["unlocked"] and emblem["has_reliable_min_condition"]
             )
             emblem["projected"] = emblem["unlocked"] and not emblem["obtained"]
+            emblem["only_here"] = obtained_ids_compare is not None and emblem["obtained"] and emblem["id"] not in obtained_ids_compare
+            emblem["only_compare"] = obtained_ids_compare is not None and not emblem["obtained"] and emblem["id"] in obtained_ids_compare
             btn = QPushButton(f"{emblem['id']:02d}\n{emblem['name']}")
-            if emblem["obtained_previous_run"]:
+            if emblem["only_here"]:
+                btn.setObjectName("collectionOnlyHere")
+            elif emblem["only_compare"]:
+                btn.setObjectName("collectionOnlyCompare")
+            elif emblem["obtained_previous_run"]:
                 btn.setObjectName("emblemUnlockedPrevious")
             elif emblem["obtained"]:
                 btn.setObjectName("emblemUnlocked")
@@ -857,6 +1036,7 @@ class CollectionPanel(QWidget):
     def __init__(self, title, subtitle, reader, columns=None, footer=None, ratio_fn=None, group_totals=None, button_size=None, show_detail=False):
         super().__init__()
         self._title = title
+        self._base_subtitle = subtitle
         self._reader = reader
         self._footer_fn = footer
         self._ratio_fn = ratio_fn or (lambda entries: (sum(e["owned"] for e in entries), len(entries)))
@@ -902,7 +1082,7 @@ class CollectionPanel(QWidget):
         self.placeholder.setObjectName("placeholder")
         outer.addWidget(self.placeholder)
 
-    def show_slot(self, slot):
+    def show_slot(self, slot, compare_slot=None):
         self.placeholder.hide()
         while self.sections.count():
             child = self.sections.takeAt(0)
@@ -910,8 +1090,18 @@ class CollectionPanel(QWidget):
                 child.widget().deleteLater()
 
         entries = self._reader(slot.mgs4_sav)
+        if compare_slot is not None:
+            entries = _mark_diff(entries, self._reader(compare_slot.mgs4_sav))
         owned, total = self._ratio_fn(entries)
-        self.header.setText(f"{self._title} ({owned} / {total})")
+        header_text = f"{self._title} ({owned} / {total})"
+        if compare_slot is not None:
+            only_here = sum(e.get("only_here", False) for e in entries)
+            only_compare = sum(e.get("only_compare", False) for e in entries)
+            header_text += f" — {only_here} en rouge, {only_compare} en vert"
+        self.header.setText(header_text)
+        self.subtitle.setText(
+            f"{self._base_subtitle} {COMPARE_MODE_HINT}" if compare_slot is not None else self._base_subtitle
+        )
 
         # Regroupe par cle "group" si presente (ordre d'apparition
         # preserve), sinon un seul groupe implicite sans en-tete.
@@ -942,7 +1132,12 @@ class CollectionPanel(QWidget):
             tile_width = self.BUTTON_SIZE[0]
             for entry in group_entries:
                 btn = QPushButton()
-                btn.setObjectName("collectionOwned" if entry["owned"] else "collectionLocked")
+                if entry.get("only_here"):
+                    btn.setObjectName("collectionOnlyHere")
+                elif entry.get("only_compare"):
+                    btn.setObjectName("collectionOnlyCompare")
+                else:
+                    btn.setObjectName("collectionOwned" if entry["owned"] else "collectionLocked")
                 btn.ensurePolished()
                 fm = btn.fontMetrics()
                 worst_case = _wrap_button_text(fm, entry["name"], 0)
@@ -998,6 +1193,36 @@ def _wrap_button_text(fm, text, max_width):
     return f"{best[1]}\n{best[2]}"
 
 
+COMPARE_MODE_HINT = (
+    "Rouge = possédé ici mais pas sur la sauvegarde de comparaison. "
+    "Vert = possédé sur la sauvegarde de comparaison mais pas ici."
+)
+
+
+def _mark_diff(entries_here, entries_compare):
+    """Mode comparaison bidirectionnel : pour chaque entree de
+    `entries_here` (la save affichee - la 1ere selectionnee), ajoute :
+    - "only_here" (rouge) : possedee ici, absente de la save de comparaison.
+    - "only_compare" (vert) : absente ici, possedee sur la save de
+      comparaison.
+    Ni l'un ni l'autre = meme etat sur les deux (l'etat 1 vs 2 n'est pas
+    pris en compte, "owned" les regroupe deja tous les deux). Appariement
+    par "id" (armes/objets, stable), ou par "name" quand "id" est None
+    (tuiles indicatives comme les FaceCamo Dore) - les deux listes
+    proviennent du meme lecteur, donc memes cles."""
+    owned_compare = {
+        (e.get("id"), e.get("name")) for e in entries_compare if e["owned"]
+    }
+    result = []
+    for e in entries_here:
+        e = dict(e)
+        key = (e.get("id"), e.get("name"))
+        e["only_here"] = e["owned"] and key not in owned_compare
+        e["only_compare"] = (not e["owned"]) and key in owned_compare
+        result.append(e)
+    return result
+
+
 def _camo_ratio(entries):
     # Compte tout (FaceCamo + Gilet + Octocamo, y compris les tuiles
     # indicatives id=None) pour que le total corresponde a la somme des
@@ -1041,7 +1266,7 @@ class WeaponsPanel(CollectionPanel):
             mgs4save.read_weapons,
         )
 
-    def show_slot(self, slot):
+    def show_slot(self, slot, compare_slot=None):
         self.placeholder.hide()
         while self.sections.count():
             child = self.sections.takeAt(0)
@@ -1049,6 +1274,8 @@ class WeaponsPanel(CollectionPanel):
                 child.widget().deleteLater()
 
         entries = self._reader(slot.mgs4_sav)
+        if compare_slot is not None:
+            entries = _mark_diff(entries, self._reader(compare_slot.mgs4_sav))
         groups: dict[str, list[dict]] = {}
         for entry in entries:
             groups.setdefault(entry["group"], []).append(entry)
@@ -1059,7 +1286,15 @@ class WeaponsPanel(CollectionPanel):
         )
         owned_accessories = sum(1 for e in groups.get("Accessoire", []) if e["owned"])
 
-        self.header.setText(f"ARMES ({owned_weapons} / {self.TARGET_WEAPONS})")
+        header_text = f"ARMES ({owned_weapons} / {self.TARGET_WEAPONS})"
+        if compare_slot is not None:
+            only_here = sum(e.get("only_here", False) for e in entries)
+            only_compare = sum(e.get("only_compare", False) for e in entries)
+            header_text += f" — {only_here} en rouge, {only_compare} en vert"
+        self.header.setText(header_text)
+        self.subtitle.setText(
+            f"{self._base_subtitle} {COMPARE_MODE_HINT}" if compare_slot is not None else self._base_subtitle
+        )
         for group_name, group_entries in groups.items():
             if group_name in ("Accessoire", "Non identifiée"):
                 continue
@@ -1099,7 +1334,12 @@ class WeaponsPanel(CollectionPanel):
         tile_width = button_size[0]
         for entry in group_entries:
             btn = QPushButton()
-            btn.setObjectName("collectionOwned" if entry["owned"] else "collectionLocked")
+            if entry.get("only_here"):
+                btn.setObjectName("collectionOnlyHere")
+            elif entry.get("only_compare"):
+                btn.setObjectName("collectionOnlyCompare")
+            else:
+                btn.setObjectName("collectionOwned" if entry["owned"] else "collectionLocked")
             btn.ensurePolished()
             fm = btn.fontMetrics()
             # Decoupage force (max_width=0) juste pour mesurer le pire cas -
@@ -1169,11 +1409,13 @@ class MainWindow(QMainWindow):
 
         self._current_folder = None  # None = detection automatique, sinon dossier choisi manuellement
         self._imported_slots = []  # saves importees ponctuellement (cle USB, email...), non persistees
+        self._current_slot = None
+        self._compare_slot = None  # mode comparaison actif si non None
 
         splitter = QSplitter()
         self.list_panel = SlotListPanel(
             self.show_stats, self.change_folder, self.refresh_current, self.delete_slot,
-            self.import_save_folder,
+            self.import_save_folder, self.toggle_compare,
         )
         self.stats_panel = StatsPanel()
         self.emblems_panel = EmblemsPanel()
@@ -1379,15 +1621,17 @@ class MainWindow(QMainWindow):
         self.list_panel.set_slots(slots_with_summary)
 
     def show_stats(self, slot):
+        self._current_slot = slot
+        cmp = self._compare_slot
         try:
-            self.stats_panel.show_slot(slot)
-            self.emblems_panel.show_slot(slot)
-            self.weapons_panel.show_slot(slot)
-            self.special_items_panel.show_slot(slot)
-            self.camo_panel.show_slot(slot)
-            self.outfits_panel.show_slot(slot)
-            self.figurines_panel.show_slot(slot)
-            self.songs_panel.show_slot(slot)
+            self.stats_panel.show_slot(slot, cmp)
+            self.emblems_panel.show_slot(slot, cmp)
+            self.weapons_panel.show_slot(slot, cmp)
+            self.special_items_panel.show_slot(slot, cmp)
+            self.camo_panel.show_slot(slot, cmp)
+            self.outfits_panel.show_slot(slot, cmp)
+            self.figurines_panel.show_slot(slot, cmp)
+            self.songs_panel.show_slot(slot, cmp)
         except OSError:
             QMessageBox.warning(
                 self,
@@ -1395,6 +1639,29 @@ class MainWindow(QMainWindow):
                 "Cette sauvegarde a disparu ou est illisible (supprimée ou en cours d'écriture par le jeu). Actualisation de la liste.",
             )
             self.refresh_slots()
+
+    def toggle_compare(self):
+        if self._compare_slot is not None:
+            self._compare_slot = None
+            self.list_panel.set_compare_active(False)
+            if self._current_slot is not None:
+                self.show_stats(self._current_slot)
+            return
+        if self._current_slot is None:
+            QMessageBox.information(self, "Comparer", "Sélectionne d'abord une sauvegarde dans la liste.")
+            return
+        dialog = CompareSlotDialog(self._current_slots_with_summary, self._current_slot, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        chosen = dialog.selected_slot()
+        if chosen is None:
+            return
+        self._compare_slot = chosen
+        summary = mgs4save.read_metadata_summary(chosen.metadata_sav)
+        progress = mgs4save.read_progress_info(chosen.mgs4_sav)
+        label = f"{summary['difficulte_nom']}, {format_lieu_acte(progress['lieu'], progress['acte'])}"
+        self.list_panel.set_compare_active(True, label, compare_path=chosen.path)
+        self.show_stats(self._current_slot)
 
 
 def main():
