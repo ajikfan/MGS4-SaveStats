@@ -1475,9 +1475,15 @@ WEAPON_NAMES = {
     # methode desormais suspecte, cf. tableau 0x352 non stable d'une partie
     # a l'autre) etait fausse. Test isole propre sur une partie differente :
     # weapon[0x30] passe de 0 a 1 pendant que weapon[0x11] reste a 0,
-    # l'utilisateur confirme avoir la Lunette de fusil et PAS le MP7.
-    # Confiance haute.
-    0x30: "Lunette de fusil",
+    # l'utilisateur confirme avoir la Lunette de fusil et PAS le MP7 - a
+    # l'epoque attribue a 0x30. RE-INVERSE (2026-09-07) : test isole
+    # encore plus propre (achat du Sachet a gaz somnifere sur une partie
+    # fraiche ou aucun des deux n'etait possede) montre que c'est en fait
+    # weapon[0x54] qui passe de 0 a 2, weapon[0x30] restant a 0 - donc
+    # 0x54 est la vraie Lunette de fusil. Hypothese : le test de 2026-09-05
+    # avait probablement debloque les deux objets simultanement sans que
+    # le changement sur 0x54 soit remarque a l'epoque. Confiance haute.
+    0x54: "Lunette de fusil",
     # Confiance haute (2026-09-05) : test isole propre, seul cet ID a
     # bouge dans tout le tableau d'armes.
     0x11: "MP7",
@@ -1677,7 +1683,14 @@ WEAPON_NAMES = {
     # de nouveau inconnus tous les deux. Confiance haute.
     0x0e: "PSS",
     0x43: "FIM-92A",
-    0x54: "Sachet à gaz somnifère",
+    # INVERSE (2026-09-07) : anciennement etiquete "Lunette de fusil" par
+    # erreur (voir 0x54 plus haut pour l'historique complet - un test
+    # isole propre a montre que weapon[0x54], pas 0x30, est la vraie
+    # Lunette de fusil). CONFIANCE BASSE : on sait juste que 0x30 n'est
+    # PAS la Lunette de fusil (reste a 0 pendant que 0x54 passait a 2),
+    # pas confirme independamment comme etant le Sachet - attribution par
+    # elimination/convention, a retester isolement.
+    0x30: "Sachet à gaz somnifère",
     # XM8/Javelin : meme methode (ordre d'apparition dans les 2 tableaux),
     # confirme par les munitions exactes (777 et 13).
     # Confiance haute (2026-09-05) : test isole propre sur une partie
@@ -1746,7 +1759,7 @@ WEAPON_CATEGORIES = {
     0x40: "Explosif",  # Claymore
     0x41: "Explosif",  # Mine a gaz somnifere
     0x42: "Explosif",  # C4
-    0x54: "Explosif",  # Sachet a gaz somnifere
+    0x54: "Accessoire",  # Lunette de fusil
     0x45: "Magazine",  # Magazine Playboy
     0x46: "Magazine",  # Magazine Emotion
     0x5b: "Accessoire",  # Poignee avant B. (accessoire M4)
@@ -1764,7 +1777,7 @@ WEAPON_CATEGORIES = {
     0x15: "Pistolet-mitrailleur",  # PP-19 Bizon
     0x12: "Pistolet-mitrailleur",  # MP5SD2
     0x13: "Pistolet-mitrailleur",  # M-10
-    0x30: "Accessoire",  # Lunette de fusil
+    0x30: "Explosif",  # Sachet a gaz somnifere
     0x11: "Pistolet-mitrailleur",  # MP7
     0x2e: "Lance-grenade",  # MGL-140
     0x4c: "Accessoire",  # GP-30 (lance-grenades sous-canon pour AK-102)
@@ -1868,6 +1881,15 @@ STRUCTURAL_WEAPON_IDS = {0x5c, 0x5d, 0x5e}
 STRUCTURAL_ITEM_IDS = {0x00, 0x13}
 
 
+# Exceptions au sens habituel de l'etat 1 ("acquise mais verrouillee chez
+# Drebin, pas utilisable"). Confirme par l'utilisateur (2026-09-07,
+# plusieurs tests) : le Silencieux M4 reste bloque a 1 sur certaines
+# parties tout en etant deja monte et fonctionnel sur son M4 en jeu -
+# donc le point rouge "verrouille" serait un faux positif pour cet ID.
+# Seul cas connu pour l'instant.
+DREBIN_LOCK_EXCEPTIONS = {0x52}  # Silencieux M4
+
+
 def read_weapons(path: str) -> list[dict]:
     """Retourne les 95 entrees du tableau d'armes (moins STRUCTURAL_WEAPON_IDS,
     masquees), groupees par categorie (voir WEAPON_CATEGORIES/
@@ -1891,7 +1913,7 @@ def read_weapons(path: str) -> list[dict]:
             "id": weapon_id,
             "name": WEAPON_NAMES.get(weapon_id, f"Arme #{weapon_id:02d}"),
             "owned": state in (1, 2),
-            "drebin_locked": state == 1,
+            "drebin_locked": state == 1 and weapon_id not in DREBIN_LOCK_EXCEPTIONS,
             "identified": weapon_id in WEAPON_NAMES,
             "group": group,
         })

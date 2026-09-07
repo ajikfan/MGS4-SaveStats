@@ -44,8 +44,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.1"
+APP_VERSION = "V4.2"
 APP_CHANGELOG = [
+    ("V4.2", "7 septembre 2026", "Correction de deux identifications inversées (Lunette de fusil / Sachet à gaz somnifère) suite à des tests isolés. Le Silencieux M4 n'affiche plus le point rouge \"verrouillé chez Drebin\" à tort (il reste parfois à l'état verrouillé en données tout en étant déjà utilisable en jeu)."),
     ("V4.1", "6 septembre 2026", "Correction d'un bug d'affichage : les fenêtres de détail (chansons, emblèmes, aide...) s'affichaient avec un fond blanc au lieu du thème sombre sur certaines configurations Windows (le fond n'était appliqué explicitement qu'à la fenêtre principale, pas aux fenêtres secondaires)."),
     ("V4.0", "6 septembre 2026", "Nouvelle fonctionnalité : import ponctuel d'une sauvegarde externe (clé USB, email...) en plus des siennes, sans la copier. Onglet Armes : point rouge sur les armes/accessoires acquis mais verrouillés chez Drebin, refonte complète des catégories (renommées et recomptées via un guide d'inventaire officiel). Compteurs canoniques corrigés sur les onglets Objets, OctoCamo (fusion de l'ancienne section \"Camouflages spéciaux\", désormais 21 motifs) et Gilets. Ajout des récompenses d'emblèmes dans leur popup de détail. Nouvelles conditions de déblocage pour plusieurs chansons, et divers ajustements de texte."),
     ("V3.2", "6 septembre 2026", "Onglet Emblèmes : distinction entre un emblème obtenu sur la partie en cours et un obtenu sur une partie précédente (nouvelle nuance de couleur), message dédié quand la partie est déjà terminée plutôt que le texte générique \"condition dépassée\", et accord au pluriel quand plusieurs conditions sont dépassées à la fois."),
