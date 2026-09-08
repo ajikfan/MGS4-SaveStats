@@ -44,8 +44,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.3"
+APP_VERSION = "V4.4"
 APP_CHANGELOG = [
+    ("V4.4", "8 septembre 2026", "Mode comparaison : le choix de la sauvegarde de référence se fait désormais directement via un bouton \"Comparer\" sur chaque ligne de la liste (vert, absent sur la sauvegarde actuellement affichée), qui remplace le bouton \"Comparer avec…\" et son sélecteur dédié — recliquer sur la sauvegarde de comparaison annule la comparaison. Les batteries de la Solid Eye sont maintenant comparées comme le reste des statistiques. Correction d'un faux positif rouge/vert sur les objets à quantité variable (ex. Ration) qui ne devrait dépendre que d'être possédé ou non, pas du nombre exact. Onglet Emblèmes déplacé en dernière position, coins arrondis sur la barre d'onglets."),
     ("V4.3", "7 septembre 2026", "Nouvelle fonctionnalité : comparer sa sauvegarde actuelle à n'importe quelle autre. Sur tous les onglets, rouge = possédé ici mais pas sur la sauvegarde de comparaison, vert = l'inverse. La sauvegarde de comparaison est mise en évidence dans la liste, et le sélecteur reprend le même format (vignette, difficulté, temps de jeu...) que la liste principale."),
     ("V4.2", "7 septembre 2026", "Correction de deux identifications inversées (Lunette de fusil / Sachet à gaz somnifère) suite à des tests isolés. Le Silencieux M4 n'affiche plus le point rouge \"verrouillé chez Drebin\" à tort (il reste parfois à l'état verrouillé en données tout en étant déjà utilisable en jeu)."),
     ("V4.1", "6 septembre 2026", "Correction d'un bug d'affichage : les fenêtres de détail (chansons, emblèmes, aide...) s'affichaient avec un fond blanc au lieu du thème sombre sur certaines configurations Windows (le fond n'était appliqué explicitement qu'à la fenêtre principale, pas aux fenêtres secondaires)."),
