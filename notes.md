@@ -1626,6 +1626,51 @@ toujours pas trouvé son ID dans le fichier (voir plus haut, section
 changement détectable dans aucune table connue, ni pour un achat isolé
 ni pour un aller-retour usage+rachat).
 
+## Session du 2026-09-09 : FIM-92A retrouvé, Metal Gear Solid Main Theme confirmé
+
+**FIM-92A** (`0x30`) : l'utilisateur remarque que l'app affiche son
+FIM-92A comme déjà utilisable (état 2) alors qu'il est encore verrouillé
+en jeu (état 1) - l'ancien ID `0x43` (jamais confirmé individuellement,
+hérité tel quel de la table Cheat Engine d'origine) était donc faux.
+Il déverrouille volontairement le FIM-92A ; sur cette fenêtre, 3 armes
+passent de 1 à 2 dans le fichier (`0x07` GSR, `0x0f` G18C, `0x30`), mais
+GSR et G18C avaient déjà été déverrouillés et confirmés indépendamment
+par l'utilisateur sur d'autres saves - seul `0x30` est une transition
+nouvelle et inexpliquée sur cette save, coïncidant exactement avec le
+déverrouillage du FIM-92A. Confiance haute. `0x30` était étiqueté
+"Sachet à gaz somnifère" (confiance basse, attribution par
+élimination/convention lors du swap avec la Lunette de fusil le
+2026-09-07) - identité de nouveau inconnue. Ancien `0x43` retiré de
+`WEAPON_NAMES`/`WEAPON_CATEGORIES`, redevient "Non identifiée".
+
+**Metal Gear Solid Main Theme** (`0x3f`, chanson) : passée en confiance
+haute - nom confirmé par popup en jeu au déblocage, à l'endroit attendu
+(Acte 5, Outer Haven, sous la trappe). Absente de la source externe de
+référence (metalgeargeneration.free.fr) mais confirmée directement.
+
+**D.E.** (`0x08`) : passé en confiance haute - test isolé propre, seul
+`0x08` bouge (`0x29`/DSR-1 reste inchangé) parmi les transitions non
+déjà expliquées sur la fenêtre de test. DSR-1 (`0x29`) reste en
+confiance basse, toujours pas isolé.
+
+**M60E4** (`0x23`) : passé en confiance haute - jamais testé isolément
+auparavant, seul cet ID bouge parmi les transitions non déjà expliquées
+sur la fenêtre de test.
+
+**MK.17, XM8, XM25, FGM-148 Javelin, Grenade au phosphore blanc** :
+reconfirmés chacun par une transition isolée cohérente (déjà en
+confiance haute depuis des tests antérieurs) - aucun changement de
+statut, juste des confirmations supplémentaires.
+
+**Sachet à gaz somnifère** (`0x43`) : CONFIANCE BASSE, attribution par
+convention/déduction (PAS un test isolé) - `0x43` est immédiatement
+adjacent au bloc continu d'explosifs/grenades/lance-roquettes `0x2e`-
+`0x42` (Claymore, Mine à gaz somnifère, C4, puis ce slot juste après).
+Identité plausible par position dans la table, mais non confirmée par
+une transition observée. À retester isolément si l'occasion se
+présente (obtenir/utiliser le Sachet sur une save où l'effet est
+observable).
+
 ## TODO - liste pour la prochaine partie de test dédiée (2026-09-06)
 
 À faire lors d'une prochaine partie fraîche dédiée aux tests, pour
@@ -1633,11 +1678,21 @@ maximiser les identifications et passer un max de choses en confiance
 haute :
 
 **Armes/objets jamais identifiés :**
-- `0x1d` (arme #29) - bonus lié à la 2e fin de partie ou plus, identité
-  toujours inconnue (pas Race Gun, contre-exemple trouvé).
-- `0x4e` (arme #78) - bonus lié à la 1ère fin de partie, identité
-  toujours inconnue (pas Race Gun non plus - c'est le 1911 Modifié/1911
-  Custom).
+- `0x1d` (arme #29) - bonus lié à la 2e fin de partie ou plus (pas Race
+  Gun, contre-exemple trouvé). **CONFIANCE BASSE (2026-09-09) : pari de
+  l'utilisateur pour "Tanegashima"**, PAS un test isolé - 0x1d est pile
+  au milieu d'un bloc continu de fusils d'assaut (M4 0x18 à XM8 0x1f,
+  sans autre trou), cohérent avec une arme bonus de complétion. À
+  confirmer par un test isolé si l'occasion se présente.
+- `0x4e` (arme #78) - bonus lié à la 1ère fin de partie (pas Race Gun,
+  pas le 1911 Modifié). **CONFIANCE BASSE (2026-09-09) : pari de
+  l'utilisateur pour "Silencieux Mk.23"**, PAS un test isolé - 0x4e est
+  pile entre le Silencieux Operator (`0x4d`) et le Silencieux 1911
+  (`0x4f`) dans le bloc continu d'accessoires `0x4a`-`0x5b`. Ajouté à
+  `DREBIN_LOCK_EXCEPTIONS` par précaution/analogie avec le Silencieux M4
+  (même situation potentielle, point rouge "verrouillé" retiré), mais
+  pas confirmé par un test dédié pour cet ID précis. À confirmer par un
+  test isolé si l'occasion se présente.
 - `0x5c`/`0x5d`/`0x5e` ("le trio") - se débloquent ensemble dès la 1ère
   fin de partie, toujours non identifiés.
 - Race Gun, Type 17, D.E. Long Barrel, Patriot, Tanegashima - aucun ID
@@ -1660,14 +1715,44 @@ haute :
   21 (gros chantier, voir section dédiée plus haut).
 
 **Confiance basse à confirmer/corriger :**
-- `0x08` (D.E.) et `0x29` (DSR-1) - obtenus ensemble, jamais isolés
-  individuellement, attribution par convention.
+- `posters_vus` (`0x1aa`, MGS4.SAV) - confirmé par un test isolé le
+  2026-09-05 (transition 0->1), mais reste bloqué à 0 malgré un poster
+  "Akina" regardé le 2026-09-09 (confirmé par l'utilisateur, avec succès
+  Steam dédié à la clé pour "avoir regardé tous les posters" - donc un
+  état persisté existe forcément quelque part). Le test du 2026-09-09
+  n'était pas isolé (changement de zone entre les deux saves comparées),
+  donc pas de nouvelle piste trouvée ailleurs non plus. Hypothèses : ce
+  champ suit un autre type d'affiche (PMC ?) et pas les posters "Akina",
+  ou le mécanisme réel est un bitmask par poster plutôt qu'un simple
+  compteur cumulatif. À revalider avec un vrai test isolé (save juste
+  avant/après un poster "Akina" précis, sans changer de zone entre les
+  deux). Total confirmé par l'utilisateur : 4 posters "Akina" à trouver
+  dans le jeu, donc si ce champ est le bon, l'affichage cible est "X/4".
+- `0x29` (DSR-1) - obtenus ensemble avec le D.E. à l'époque (0x08 et 0x29
+  flushaient en même temps), attribution par convention, toujours pas
+  isolé depuis. **D.E. (`0x08`) passé en confiance haute le 2026-09-09** :
+  test isolé propre, seul 0x08 bouge (0x29 reste inchangé) parmi les
+  transitions non déjà expliquées par ailleurs sur cette fenêtre.
 - `0x02`/`0x03`/`0x0a`/`0x0b`/`0x4d` (Mk.2 Pistol/Operator/1911
   Modifié/Thor .45-70/Silencieux Operator) - lot Otacon complet,
   attribution par simple ordre d'ID croissant, aucune certitude réelle
   sur qui est qui au sein du lot.
 - "Destiny's Call" (chanson, `0x5c` dans SONG_NAMES - attention,
   numérotation différente du "trio" d'armes) - titre exact incertain.
+- `0x43` (Sachet à gaz somnifère) - attribution par convention/déduction
+  (position dans la table, immédiatement adjacent au bloc continu
+  d'explosifs/grenades/lance-roquettes `0x2e`-`0x42`), PAS un test isolé.
+  À confirmer/infirmer avec un vrai test si l'occasion se présente.
+- `0x1d` (Tanegashima) - pari de l'utilisateur, PAS un test isolé -
+  position pile au milieu du bloc continu de fusils d'assaut `0x18`-
+  `0x1f`, cohérent avec une arme bonus de complétion (2e fin de partie
+  ou plus). À confirmer/infirmer avec un vrai test si l'occasion se
+  présente.
+- `0x4e` (Silencieux Mk.23) - pari de l'utilisateur, PAS un test isolé -
+  position pile entre Silencieux Operator (`0x4d`) et Silencieux 1911
+  (`0x4f`). Point rouge "verrouillé chez Drebin" retiré par précaution
+  (voir `DREBIN_LOCK_EXCEPTIONS`), non confirmé par un test dédié. À
+  confirmer/infirmer avec un vrai test si l'occasion se présente.
 
 **Munitions spéciales (sujet secondaire, optionnel) :**
 - Confirmer si le Mosin-Nagant a bien le même schéma de bloc que le

@@ -57,9 +57,18 @@ STATS = {
     # sur une simple sauvegarde manuelle. Pas de conversion exacte en
     # secondes possible (framerate non fixe), voir notes.md.
     "temps_accroupi_frames": (0x1a8, "<H"),
-    # Confirme par test isole 2026-09-05 : seule transition exacte 0->1 de
-    # toute la zone de stats entre les deux saves, sur un offset jusque-la
-    # inutilise (coince entre temps_accroupi 0x1a8 et temps_allonge 0x1ac).
+    # INCERTAIN (2026-09-09) : confirme par un test isole le 2026-09-05
+    # (seule transition exacte 0->1 entre deux saves, sur un offset
+    # jusque-la inutilise), mais reste bloque a 0 malgre un poster "Akina"
+    # regarde le 2026-09-09 (confirme par l'utilisateur, avec succes Steam
+    # dedie a l'appui) - ce test n'etait pas isole (changement de zone
+    # entre les deux saves), donc pas de nouvelle transition observable
+    # ailleurs non plus, mais ce champ ne semble pas suivre CE type de
+    # poster. Peut-etre un compteur pour un autre type d'affiche (PMC ?),
+    # ou un mecanisme different (bitmask par poster plutot qu'un compteur
+    # cumulatif). A revalider avec un vrai test isole. Total confirme par
+    # l'utilisateur (2026-09-09) : 4 posters "Akina" a trouver dans le jeu,
+    # donc si ce champ est le bon, l'affichage cible serait "X/4".
     "posters_vus": (0x1aa, "<H"),
     "temps_allonge_frames": (0x1ac, "<H"),
     "temps_mur_frames": (0x1b4, "<H"),
@@ -1055,17 +1064,23 @@ OUTFIT_NAMES = {
 # marques "possede" par defaut, donc jamais vus "flush" dans un diff -
 # pas d'ID connu pour eux, non ajoutes ici.
 #
-# 5 entrees ABSENTES de cette page de reference malgre une recherche
-# complete (y compris la section "telecharges") : Metal Gear Solid Main
-# Theme (0x3f), Gekko (0x5f), Desperate Chase (0x60), Midnight Shadow
-# (0x61), Mobs Alive (0x62). Probablement des erreurs heritees de la table
-# Cheat Engine d'origine (comme d'autres cas similaires, voir notes.md) -
-# a verifier par test isole si l'occasion se presente, pas retirees pour
-# l'instant faute de mieux.
+# A l'origine 5 entrees ABSENTES de cette page de reference malgre une
+# recherche complete (y compris la section "telecharges") : Metal Gear
+# Solid Main Theme (0x3f, confirme en confiance haute le 2026-09-09 par
+# popup en jeu au deblocage - voir commentaire dedie plus bas), Gekko
+# (0x5f), Desperate Chase (0x60), Midnight Shadow (0x61), Mobs Alive
+# (0x62). Probablement des erreurs heritees de la table Cheat Engine
+# d'origine (comme d'autres cas similaires, voir notes.md) - a verifier
+# par test isole si l'occasion se presente pour celles qui restent, pas
+# retirees pour l'instant faute de mieux.
 SONG_NAMES = {
     0x3d: "Warhead Storage",
     0x3e: "Yell \"Dead Cell\"",
-    0x3f: "Metal Gear Solid Main Theme",  # suspect, voir commentaire au-dessus
+    # Confiance haute (2026-09-09) : nom confirme par popup en jeu au
+    # deblocage, a l'endroit attendu (Acte 5, Outer Haven, sous la trappe -
+    # voir SONG_CONDITIONS). Absente de la source externe de reference,
+    # mais confirmee directement, pas besoin de test isole supplementaire.
+    0x3f: "Metal Gear Solid Main Theme",
     # Confiance haute (2026-09-06) : test isole propre, seul cet ID a
     # bouge dans tout le tableau d'objets.
     0x40: "On Alert",
@@ -1493,15 +1508,27 @@ WEAPON_NAMES = {
     # jusque-la) qui bouge au moment ou l'utilisateur obtient reellement le
     # Masterkey, pas weapon[0x29] qui reste verrouille. Reassigne, voir
     # 0x4a plus bas. Vrai ID de 0x29 de nouveau inconnu.
-    # CONFIANCE BASSE (2026-09-06) : D.E. et DSR-1 obtenus ensemble (0x08 et
-    # 0x29 flushent en meme temps), impossible de les isoler individuellement.
-    # Attribution par convention a la demande de l'utilisateur, sans certitude
-    # sur qui est qui entre les 2.
+    # CONFIANCE BASSE (2026-09-06) : D.E. et DSR-1 obtenus ensemble a
+    # l'epoque (0x08 et 0x29 flushaient en meme temps), impossible de les
+    # isoler individuellement. Attribution par convention a la demande de
+    # l'utilisateur, sans certitude sur qui est qui entre les 2. DSR-1
+    # (0x29) toujours pas isole depuis, reste en confiance basse.
     0x29: "DSR-1",
+    # CONFIANCE HAUTE desormais (2026-09-09) pour le D.E. : test isole
+    # propre, seul 0x08 bouge (0x29/DSR-1 reste inchange) parmi les
+    # transitions non deja expliquees par ailleurs sur cette fenetre.
     0x08: "D.E.",
     # Confiance haute (2026-09-06) : test isole propre, seul cet ID a
     # bouge dans tout le tableau d'armes.
     0x1b: "AN94",
+    # CONFIANCE BASSE (2026-09-09) : pari de l'utilisateur, PAS un test
+    # isole. 0x1d est un bonus lie a la 2e fin de partie ou plus (identite
+    # inconnue jusqu'ici, confirme comme n'etant PAS le Race Gun), et se
+    # trouve pile au milieu d'un bloc continu de fusils d'assaut (M4 0x18
+    # a XM8 0x1f, sans autre trou) - coherent avec le Tanegashima, arme
+    # bonus de completion connue du jeu. A confirmer par un test isole si
+    # l'occasion se presente.
+    0x1d: "Tanegashima",
     0x1e: "MK.17",
     # Confiance haute : test isole propre en 2 etapes (2026-09-05) - save
     # avec uniquement "Grenade au phosphore blanc" possedee dans le groupe
@@ -1582,7 +1609,18 @@ WEAPON_NAMES = {
     # bouge dans tout le tableau d'armes.
     0x24: "Double canon",
     0x42: "C4",
+    # CONFIANCE BASSE (2026-09-09) : attribution par convention/deduction,
+    # PAS un test isole. 0x43 est immediatement adjacent au bloc continu
+    # d'explosifs/grenades/lance-roquettes 0x2e-0x42 (Claymore, Mine a gaz
+    # somnifere, C4, puis ce slot juste apres) - identite plausible mais
+    # non confirmee par une transition observee. Ancien nom faux herite
+    # de la table Cheat Engine d'origine, jamais teste isolement (voir
+    # 0x30 plus haut pour l'historique complet du FIM-92A).
+    0x43: "Sachet à gaz somnifère",
     0x1a: "G3A3",
+    # Confiance haute (2026-09-09) : test isole propre, seul cet ID a
+    # bouge parmi les transitions non deja expliquees par ailleurs sur
+    # cette fenetre (jamais teste isolement auparavant).
     0x23: "M60E4",
     # Confiance haute (2026-09-05) : test isole propre, seul cet ID a
     # bouge dans tout le tableau d'armes.
@@ -1599,6 +1637,13 @@ WEAPON_NAMES = {
     0x25: "M870 Modifié",
     0x57: "Lumière Fusil (M4)",  # nom exact confirme par capture d'ecran (2026-09-02)
     0x4f: "Silencieux 1911",
+    # CONFIANCE BASSE (2026-09-09) : pari de l'utilisateur, PAS un test
+    # isole. 0x4e est un bonus lie a la 1ere fin de partie (identite
+    # inconnue jusqu'ici, ni Race Gun ni 1911 Modifie), pile entre le
+    # Silencieux Operator (0x4d) et le Silencieux 1911 (0x4f) dans le
+    # bloc continu d'accessoires 0x4a-0x5b - coherent avec un silencieux
+    # supplementaire pour une arme de poing pas encore couverte.
+    0x4e: "Silencieux Mk.23",
     # Confiance haute (2026-09-05) : test isole propre, seul cet ID a
     # bouge dans tout le tableau d'armes.
     0x5a: "Poignée avant A.",
@@ -1682,15 +1727,21 @@ WEAPON_NAMES = {
     # le vrai PSS. Vrai ID de "Visee Laser (M4)" et de la Lunette de fusil
     # de nouveau inconnus tous les deux. Confiance haute.
     0x0e: "PSS",
-    0x43: "FIM-92A",
-    # INVERSE (2026-09-07) : anciennement etiquete "Lunette de fusil" par
-    # erreur (voir 0x54 plus haut pour l'historique complet - un test
-    # isole propre a montre que weapon[0x54], pas 0x30, est la vraie
-    # Lunette de fusil). CONFIANCE BASSE : on sait juste que 0x30 n'est
-    # PAS la Lunette de fusil (reste a 0 pendant que 0x54 passait a 2),
-    # pas confirme independamment comme etant le Sachet - attribution par
-    # elimination/convention, a retester isolement.
-    0x30: "Sachet à gaz somnifère",
+    # INVERSE (2026-09-09) : anciennement etiquete "Sachet a gaz
+    # somnifere" par erreur (deja attribue par elimination/convention le
+    # 2026-09-07 lors du swap avec la Lunette de fusil - confiance basse
+    # des le depart, jamais confirme independamment). Confiance haute
+    # desormais : l'utilisateur deverrouille volontairement le FIM-92A en jeu
+    # (etat verrouille -> utilisable) ; sur cette fenetre, 3 armes
+    # passent de 1 a 2 dans le fichier (0x07 GSR, 0x0f G18C, 0x30), mais
+    # GSR et G18C ont deja ete deverrouilles et confirmes independamment
+    # par l'utilisateur sur d'autres saves - seul 0x30 est une transition
+    # nouvelle et inexpliquee sur cette save, coincidant exactement avec
+    # le deverrouillage du FIM-92A. Vraie identite du Sachet a gaz
+    # somnifere de nouveau inconnue (l'ancien 0x43, jamais confirme
+    # individuellement, etait deja marque comme herite tel quel de la
+    # table Cheat Engine d'origine).
+    0x30: "FIM-92A",
     # XM8/Javelin : meme methode (ordre d'apparition dans les 2 tableaux),
     # confirme par les munitions exactes (777 et 13).
     # Confiance haute (2026-09-05) : test isole propre sur une partie
@@ -1745,6 +1796,7 @@ WEAPON_CATEGORIES = {
     0x25: "Fusil à pompe",  # M870 Modifie
     0x1a: "Fusil d'assaut",  # G3A3
     0x1c: "Fusil d'assaut",  # FAL
+    0x1d: "Fusil d'assaut",  # Tanegashima (confiance basse)
     0x1b: "Fusil d'assaut",  # AN94
     0x32: "Lance-roquette",
     0x36: "Grenade",
@@ -1759,6 +1811,7 @@ WEAPON_CATEGORIES = {
     0x40: "Explosif",  # Claymore
     0x41: "Explosif",  # Mine a gaz somnifere
     0x42: "Explosif",  # C4
+    0x43: "Explosif",  # Sachet a gaz somnifere (confiance basse)
     0x54: "Accessoire",  # Lunette de fusil
     0x45: "Magazine",  # Magazine Playboy
     0x46: "Magazine",  # Magazine Emotion
@@ -1770,6 +1823,7 @@ WEAPON_CATEGORIES = {
     0x50: "Accessoire",  # Silencieux M10
     0x57: "Accessoire",  # Lumiere pour arme d'epaule
     0x4f: "Accessoire",  # Silencieux 1911
+    0x4e: "Accessoire",  # Silencieux Mk.23 (confiance basse)
     0x0a: "Arme de poing",  # 1911 Modifie
     0x0b: "Arme de poing",  # Thor .45-70 - reclasse avec les pistolets (liste utilisateur, 2026-09-06)
     0x5a: "Accessoire",  # Poignee avant A.
@@ -1777,14 +1831,14 @@ WEAPON_CATEGORIES = {
     0x15: "Pistolet-mitrailleur",  # PP-19 Bizon
     0x12: "Pistolet-mitrailleur",  # MP5SD2
     0x13: "Pistolet-mitrailleur",  # M-10
-    0x30: "Explosif",  # Sachet a gaz somnifere
+    0x30: "Lance-roquette",  # FIM-92A
     0x11: "Pistolet-mitrailleur",  # MP7
     0x2e: "Lance-grenade",  # MGL-140
     0x4c: "Accessoire",  # GP-30 (lance-grenades sous-canon pour AK-102)
     0x37: "Grenade",  # Grenade a particules metalliques
     0x04: "Arme de poing",  # Mk.23
     0x05: "Arme de poing",  # PMM (Makarov PMM)
-    0x08: "Arme de poing",  # D.E. (confiance basse)
+    0x08: "Arme de poing",  # D.E.
     0x29: "Fusil Sniper",  # DSR-1 (confiance basse)
     0x56: "Accessoire",  # Visee point rouge (MP7)
     0x55: "Accessoire",  # Visee point rouge (M4)
@@ -1796,7 +1850,6 @@ WEAPON_CATEGORIES = {
     0x2b: "Fusil Sniper",  # Mosin-Nagant
     0x59: "Accessoire",  # Lumiere pour pistolet
     0x4a: "Accessoire",  # Masterkey
-    0x43: "Lance-roquette",  # FIM-92A (Stinger)
     0x1f: "Fusil d'assaut",  # XM8
     0x31: "Lance-roquette",  # FGM-148 Javelin
     0x22: "Mitrailleuse",  # PKM
@@ -1812,7 +1865,7 @@ WEAPON_CATEGORIES = {
     0x06: "Arme de poing",  # Five-Seven
     0x47: "Autre",  # Poupee Mantis (objet cle, pas une vraie arme)
     0x48: "Autre",  # Poupee Sorrow (idem)
-    0x0c: "Autre",  # Arme de chasse (bonus post-jeu)
+    0x0c: "Arme de poing",  # Arme de chasse (bonus post-jeu) - reclassee (2026-09-09), liste utilisateur
     0x0d: "Arme de poing",  # Pistolet solaire - reclasse avec les pistolets (liste utilisateur, 2026-09-06)
 }
 
@@ -1886,8 +1939,11 @@ STRUCTURAL_ITEM_IDS = {0x00, 0x13}
 # plusieurs tests) : le Silencieux M4 reste bloque a 1 sur certaines
 # parties tout en etant deja monte et fonctionnel sur son M4 en jeu -
 # donc le point rouge "verrouille" serait un faux positif pour cet ID.
-# Seul cas connu pour l'instant.
-DREBIN_LOCK_EXCEPTIONS = {0x52}  # Silencieux M4
+# Silencieux Mk.23 (0x4e, confiance basse sur l'identite elle-meme -
+# voir WEAPON_NAMES) ajoute par precaution/analogie le 2026-09-09, meme
+# situation potentielle qu'avec le Silencieux M4, mais PAS confirme par
+# un test dedie pour cet ID precis.
+DREBIN_LOCK_EXCEPTIONS = {0x52, 0x4e}  # Silencieux M4, Silencieux Mk.23
 
 
 def read_weapons(path: str) -> list[dict]:

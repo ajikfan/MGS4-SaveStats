@@ -12,7 +12,7 @@ import os
 import sys
 from ctypes import wintypes
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -44,8 +44,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.4"
+APP_VERSION = "V4.5"
 APP_CHANGELOG = [
+    ("V4.5", "9 septembre 2026", "Correction d'un bug important : actualiser la liste des sauvegardes pouvait changer celle affichée sans prévenir dès qu'une nouvelle sauvegarde apparaissait plus haut dans la liste (il fallait actualiser deux fois pour que ça se stabilise). Mode comparaison : le bouton \"Comparer\" est désormais masqué sur la sauvegarde actuellement affichée (comparer une sauvegarde à elle-même n'a pas de sens) et coloré en vert. Corrections d'identifications : FIM-92A, D.E. et M60E4 confirmés par tests isolés ; Sachet à gaz somnifère, Tanegashima et Silencieux Mk.23 ajoutés à titre d'hypothèse (confiance basse, à confirmer) ; \"Arme de chasse\" reclassée parmi les armes de poing. Affichage : les fusils d'assaut sont répartis sur 2 lignes pour éviter un défilement horizontal."),
     ("V4.4", "8 septembre 2026", "Mode comparaison : le choix de la sauvegarde de référence se fait désormais directement via un bouton \"Comparer\" sur chaque ligne de la liste (vert, absent sur la sauvegarde actuellement affichée), qui remplace le bouton \"Comparer avec…\" et son sélecteur dédié — recliquer sur la sauvegarde de comparaison annule la comparaison. Les batteries de la Solid Eye sont maintenant comparées comme le reste des statistiques. Correction d'un faux positif rouge/vert sur les objets à quantité variable (ex. Ration) qui ne devrait dépendre que d'être possédé ou non, pas du nombre exact. Onglet Emblèmes déplacé en dernière position, coins arrondis sur la barre d'onglets."),
     ("V4.3", "7 septembre 2026", "Nouvelle fonctionnalité : comparer sa sauvegarde actuelle à n'importe quelle autre. Sur tous les onglets, rouge = possédé ici mais pas sur la sauvegarde de comparaison, vert = l'inverse. La sauvegarde de comparaison est mise en évidence dans la liste, et le sélecteur reprend le même format (vignette, difficulté, temps de jeu...) que la liste principale."),
     ("V4.2", "7 septembre 2026", "Correction de deux identifications inversées (Lunette de fusil / Sachet à gaz somnifère) suite à des tests isolés. Le Silencieux M4 n'affiche plus le point rouge \"verrouillé chez Drebin\" à tort (il reste parfois à l'état verrouillé en données tout en étant déjà utilisable en jeu)."),
@@ -426,6 +427,7 @@ class SlotListPanel(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list_widget.currentItemChanged.connect(self._on_current_item_changed)
+        self.list_widget.viewport().installEventFilter(self)
         self._on_selection_changed = on_selection_changed
         self._selected_path = None
         layout.addWidget(self.list_widget)
@@ -442,6 +444,22 @@ class SlotListPanel(QWidget):
         import_btn.clicked.connect(on_import_folder)
         layout.addWidget(import_btn)
 
+    def eventFilter(self, watched, event):
+        # Empeche un clic sur la ligne cible de comparaison de changer la
+        # selection - avant meme que Qt ne touche au modele de selection,
+        # pour eviter tout scintillement visuel (l'ancienne ligne selectionnee
+        # perdrait brievement son style "selectionne" pendant le clic sinon).
+        # Le bouton "Quitter la comparaison" flottant au-dessus de cette
+        # ligne est un vrai widget enfant : il consomme son propre clic
+        # avant qu'il n'atteigne le viewport, donc n'est jamais concerne ici.
+        if watched is self.list_widget.viewport() and event.type() in (
+            QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButtonDblClick,
+        ):
+            item = self.list_widget.itemAt(event.position().toPoint())
+            if item is not None and item.data(Qt.UserRole).path == self._compare_target_path:
+                return True
+        return super().eventFilter(watched, event)
+
     def _on_current_item_changed(self, current, _prev):
         if not current:
             return
@@ -454,6 +472,16 @@ class SlotListPanel(QWidget):
         self._compare_target_path = compare_path if active else None
         self._restyle_rows()
 
+    def _apply_selectable_flag(self, item, slot):
+        """La ligne cible de comparaison n'est pas selectionnable : un clic
+        dessus (en dehors du bouton "Quitter la comparaison") ne doit rien
+        faire, plutot que de changer la selection et se retrouver a
+        comparer la sauvegarde a elle-meme."""
+        if slot.path == self._compare_target_path:
+            item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
+        else:
+            item.setFlags(item.flags() | Qt.ItemIsSelectable)
+
     def _restyle_rows(self):
         """Reconstruit juste le style des lignes deja affichees (contour vert
         sur la cible de comparaison), sans redemander les slots ni toucher a
@@ -464,6 +492,7 @@ class SlotListPanel(QWidget):
             old_row = self.list_widget.itemWidget(item)
             if old_row is None:
                 continue
+            self._apply_selectable_flag(item, slot)
             new_row = SlotRowWidget(
                 slot, old_row.label_text, self._on_delete_slot,
                 is_compare_target=(slot.path == self._compare_target_path),
@@ -484,10 +513,19 @@ class SlotListPanel(QWidget):
         self.count_label.setText(
             f"({count}/{MGS4_MAX_SAVE_SLOTS} sauvegarde{'s' if count != 1 else ''})"
         )
+        # Fige la cible AVANT clear()/addItem() : des le tout premier addItem()
+        # sur une liste vide, Qt peut emettre currentItemChanged de lui-meme
+        # (avant meme la fin de cette boucle), ce qui appelle
+        # _on_current_item_changed() et ecraserait prematurement
+        # self._selected_path si on le relisait en cours de route - cassant
+        # la restauration de selection des qu'une nouvelle sauvegarde plus
+        # recente apparait en tete de liste (bug constate par l'utilisateur :
+        # le 1er "Actualiser" changeait de sauvegarde, le 2e la gardait).
+        target_path = self._selected_path
         self.list_widget.clear()
         restore_row = None
         for i, (slot, summary) in enumerate(slots_with_summary):
-            if slot.path == self._selected_path:
+            if slot.path == target_path:
                 restore_row = i
             imported_tag = "📁 IMPORTÉE\n" if slot.imported else ""
             label = (
@@ -500,11 +538,12 @@ class SlotListPanel(QWidget):
             )
             item = QListWidgetItem()
             item.setData(Qt.UserRole, slot)
+            self._apply_selectable_flag(item, slot)
             row = SlotRowWidget(
                 slot, label, self._on_delete_slot,
                 is_compare_target=(slot.path == self._compare_target_path),
                 on_compare=self._on_compare_row,
-                is_current=(slot.path == self._selected_path),
+                is_current=(slot.path == target_path),
             )
             item.setSizeHint(row.sizeHint())
             self.list_widget.addItem(item)
@@ -1246,6 +1285,11 @@ class WeaponsPanel(CollectionPanel):
     WEAPON_BUTTON_SIZE = (105, 50)
     ACCESSORY_COLUMNS = 5
     ACCESSORY_BUTTON_SIZE = (170, 50)
+    # Groupe a 8 entrees pile : sur une seule ligne de WEAPON_COLUMNS, la
+    # largeur totale (tuiles elargies par les noms les plus longs du
+    # groupe, ex. "Tanegashima") deborde le panneau et force un scroll
+    # horizontal. Colonnes reduites pour repartir sur 2 lignes.
+    ASSAULT_RIFLE_COLUMNS = 4
 
     def __init__(self):
         super().__init__(
@@ -1290,7 +1334,8 @@ class WeaponsPanel(CollectionPanel):
         for group_name, group_entries in groups.items():
             if group_name in ("Accessoire", "Non identifiée"):
                 continue
-            self._add_group(group_name, group_entries, self.WEAPON_COLUMNS, self.WEAPON_BUTTON_SIZE)
+            columns = self.ASSAULT_RIFLE_COLUMNS if group_name == "Fusil d'assaut" else self.WEAPON_COLUMNS
+            self._add_group(group_name, group_entries, columns, self.WEAPON_BUTTON_SIZE)
 
         self._add_section_title(f"ACCESSOIRES ({owned_accessories} / {self.TARGET_ACCESSORIES})")
         self._add_group("Accessoire", groups.get("Accessoire", []), self.ACCESSORY_COLUMNS, self.ACCESSORY_BUTTON_SIZE, show_header=False)
