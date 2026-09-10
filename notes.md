@@ -570,6 +570,15 @@ mapping (0x1c/0x1d inversés, FaceCamo mal placé à 0x14) - corrigé :
   (dup?)" et jamais utilisé), pas `0x14`. `0x14` vaut 0 sur tous nos slots
   malgré le FaceCamo obtenu - son rôle réel reste inconnu.
 
+**Reconfirmation (2026-09-10)** : après une période où l'ID du Costume
+d'Altaïr avait été retiré faute de certitude (tuile indicative
+"toujours verrouillée" dans `read_outfits`), un test isolé propre
+(seule case du tableau d'items à bouger entre deux saves comparées, 0x1d
+`65535` -> `1`) confirme bien `0x1d` = Costume d'Altaïr, pile entre les 3
+déguisements et le Costume de Snake (`0x1e`) - cohérent avec l'hypothèse
+d'origine ci-dessus. Tuile indicative retirée de `read_outfits`, `0x1d`
+ajouté à `OUTFIT_NAMES` en confiance haute.
+
 Leçon : la table Cheat Engine communautaire est fiable pour la plupart des
 IDs mais pas infaillible - une vérification directe par l'utilisateur
 reste plus fiable que nos déductions par corrélation quand les deux se
@@ -1706,10 +1715,10 @@ haute :
   un diff isolé avant/après avoir dépassé 41 morts sur UNE MÊME partie
   continue (mourir 41+ fois délibérément, sauvegarder juste avant et
   juste après le seuil).
-- FaceCamo Doré, "Doré" (FaceCamo), Gilet Doré, Costume d'Altaïr - liés
-  à la détection d'une sauvegarde Master Collection - test
-  suppression/ajout de la save MC Vol.1 tenté mais pas concluant
-  (le FaceCamo restait présent), à refaire plus rigoureusement avec un
+- FaceCamo Doré, "Doré" (FaceCamo), Gilet Doré - liés à la détection
+  d'une sauvegarde Master Collection - test suppression/ajout de la
+  save MC Vol.1 tenté mais pas concluant (le FaceCamo restait présent),
+  à refaire plus rigoureusement avec un
   vrai diff avant/après.
 - Les 21 motifs Octocamo - aucun ID de sauvegarde connu pour aucun des
   21 (gros chantier, voir section dédiée plus haut).
@@ -1728,6 +1737,32 @@ haute :
   avant/après un poster "Akina" précis, sans changer de zone entre les
   deux). Total confirmé par l'utilisateur : 4 posters "Akina" à trouver
   dans le jeu, donc si ce champ est le bon, l'affichage cible est "X/4".
+  **Nouvelle piste (2026-09-10)** : `0x636c` passe de `00` à `02` sur un
+  test où l'utilisateur passe de 0 à 2 posters vus d'un coup (en
+  changeant de zone, seul moyen de forcer un flush) - correspondance
+  exacte avec le delta observé, hors de toutes les zones de bruit connu
+  liées au changement de zone (`0x0aa4`-`0x1b2b`, `0x8344` et voisins).
+  `0x634c` passe aussi de `00` à `01` juste avant, peut-être un flag "au
+  moins un poster vu" distinct du compteur.
+  **PISTE INFIRMÉE (2026-09-10)** : l'utilisateur a ensuite vu les 4
+  posters du jeu et obtenu le succès Steam correspondant, mais `0x636c`
+  reste bloqué à `02` (et `0x634c` à `01`) malgré un nouveau changement
+  de zone (donc un flush a bien eu lieu). Recherche élargie (tout octet
+  passé de `0` à `4`, puis tout octet passé de `0` à `1` depuis le
+  backup à 0 poster, hors zones de bruit connues) : aucun candidat
+  clair ne ressort - soit un gros paquet d'une vingtaine d'octets à
+  `0x51d8`-`0x51fe` (trop nombreux, probablement lié aux multiples
+  checkpoints franchis entre-temps, pas aux posters), soit un groupe de
+  7 (pas 4) autour de `0x6500`-`0x65f4`.
+  **Nouvelle hypothèse à tester (proposée par l'utilisateur)** : plutôt
+  qu'un compteur unique 0-4, le jeu pourrait stocker 4 flags séparés
+  (un par poster, chacun 0->1 indépendamment), le succès se déclenchant
+  quand les 4 valent 1. Pas testable avec les données actuelles (aucun
+  backup de l'état intermédiaire à 2 posters, donc impossible de savoir
+  quels flags progressent entre 0->2 puis 2->4). À reprendre sur une
+  toute nouvelle partie, en sauvegardant (avec backup local à chaque
+  fois) après CHAQUE poster individuellement pour isoler les flags un
+  par un plutôt qu'en bloc.
 - `0x29` (DSR-1) - obtenus ensemble avec le D.E. à l'époque (0x08 et 0x29
   flushaient en même temps), attribution par convention, toujours pas
   isolé depuis. **D.E. (`0x08`) passé en confiance haute le 2026-09-09** :

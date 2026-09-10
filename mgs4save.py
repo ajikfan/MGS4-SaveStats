@@ -21,7 +21,7 @@ STATS = {
     "continues": (0x158, "<H"),
     "alertes": (0x16e, "<H"),
     "kills_total": (0x178, "<H"),
-    "objets_speciaux_bitmask": (0x17a, "<H"),  # zero/non-zero uniquement, bits individuels non identifies
+    "objets_speciaux_bitmask": (0x17a, "<H"),  # bits individuels identifies, voir SPECIAL_ITEM_USE_BITS
     "cqc": (0x180, "<H"),
     "headshots": (0x182, "<H"),
     "knife_kills": (0x184, "<H"),
@@ -76,6 +76,11 @@ STATS = {
     "temps_baril_frames": (0x1bc, "<I"),
     "temps_jeu_frames": (0x168, "<I"),  # alternative a read_playtime_seconds(), moins precis (framerate variable)
 }
+
+# Total confirme par l'utilisateur (2026-09-09) : 4 posters "Akina" a
+# trouver dans le jeu - affiche "X/4" independamment de la fiabilite du
+# champ posters_vus lui-meme (voir commentaire "INCERTAIN" ci-dessus).
+POSTERS_MAX = 4
 
 # Stats affichees en jeu comme une seule valeur mais stockees comme la somme
 # de deux champs distincts (confirme via zexk/bbtracker, voir notes.md).
@@ -1035,6 +1040,12 @@ OUTFIT_NAMES = {
     0x1a: "Déguisement de milicien du Moyen-Orient",  # nom exact confirme par popup d'acquisition (2026-09-02)
     0x1b: "Déguisement de rebelle d'Amérique du Sud",  # confiance haute, reconfirme par test isole 2026-09-05
     0x1c: "Déguisement civil de l'Europe de l'Est",
+    # Confiance haute (2026-09-10) : test isole propre, seule case du
+    # tableau d'items a bouger (65535 -> 1) entre les deux saves
+    # comparees, pile entre les 3 deguisements ci-dessus et le Costume
+    # de Snake (0x1e) - ID reel enfin retrouve (voir notes.md, "Costume
+    # d'Altair retires" pour l'historique de la case indicative).
+    0x1d: "Costume d'Altaïr",
     # Nouvelle position trouvee suite a l'epilogue (jeu termine) - coherent
     # avec la condition reelle "apres avoir fini le jeu" qui avait invalide
     # l'ancienne position 0x1c (voir plus haut).
@@ -1231,6 +1242,10 @@ BOOLEAN_GENERAL_ITEMS = {"Boîte en carton"}
 # Bit = 1 des que l'objet a ete equipe/utilise au moins une fois PENDANT
 # cette partie - independant de la possession permanente (0x0f/0x10 dans
 # GENERAL_ITEM_NAMES), qui elle est le sujet de cette conversation.
+# CONFIANCE HAUTE (2026-09-10) : test isole propre par l'utilisateur -
+# bit 1 (Camouflage optique) deja actif seul (0b10), puis bit 0
+# (Bandana) qui s'active a son tour apres utilisation (0b11), sans
+# aucun autre changement entre les deux saves comparees.
 SPECIAL_ITEM_USE_OFFSET = 0x017a
 SPECIAL_ITEM_USE_BITS = {"Bandana": 0, "Camouflage optique": 1}
 
@@ -1359,14 +1374,6 @@ def read_outfits(path: str) -> list[dict]:
     entries = _read_item_collection(path, OUTFIT_NAMES)
     for entry in entries:
         entry["condition"] = OUTFIT_CONDITIONS.get(entry["name"], "")
-    # ID reel jamais retrouve (voir notes.md, "Costume d'Altair retires") -
-    # tuile indicative uniquement, toujours affichee verrouillee.
-    entries.append({
-        "id": None,
-        "name": "Costume d'Altaïr",
-        "owned": False,
-        "condition": OUTFIT_CONDITIONS["Costume d'Altaïr"],
-    })
     return entries
 
 

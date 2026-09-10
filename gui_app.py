@@ -12,7 +12,7 @@ import os
 import sys
 from ctypes import wintypes
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QGridLayout,
+    QLayout,
     QListWidget,
     QListWidgetItem,
     QPushButton,
@@ -44,8 +45,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.5"
+APP_VERSION = "V4.6"
 APP_CHANGELOG = [
+    ("V4.6", "10 septembre 2026", "Affichage des armes/accessoires entièrement revu pour s'adapter à la taille de la fenêtre (fini le défilement horizontal, peu importe le nombre d'entrées dans un groupe). Onglet Stats : le nombre de posters vus affiche désormais \"X / 4\", et \"Objets spéciaux utilisés\" liste maintenant lesquels (Bandana, Camouflage optique) plutôt qu'un simple Oui/Non. Le Costume d'Altaïr est enfin détecté correctement (n'affichait jamais son vrai statut auparavant). Nouvelle icône de l'application."),
     ("V4.5", "9 septembre 2026", "Correction d'un bug important : actualiser la liste des sauvegardes pouvait changer celle affichée sans prévenir dès qu'une nouvelle sauvegarde apparaissait plus haut dans la liste (il fallait actualiser deux fois pour que ça se stabilise). Mode comparaison : le bouton \"Comparer\" est désormais masqué sur la sauvegarde actuellement affichée (comparer une sauvegarde à elle-même n'a pas de sens) et coloré en vert. Corrections d'identifications : FIM-92A, D.E. et M60E4 confirmés par tests isolés ; Sachet à gaz somnifère, Tanegashima et Silencieux Mk.23 ajoutés à titre d'hypothèse (confiance basse, à confirmer) ; \"Arme de chasse\" reclassée parmi les armes de poing. Affichage : les fusils d'assaut sont répartis sur 2 lignes pour éviter un défilement horizontal."),
     ("V4.4", "8 septembre 2026", "Mode comparaison : le choix de la sauvegarde de référence se fait désormais directement via un bouton \"Comparer\" sur chaque ligne de la liste (vert, absent sur la sauvegarde actuellement affichée), qui remplace le bouton \"Comparer avec…\" et son sélecteur dédié — recliquer sur la sauvegarde de comparaison annule la comparaison. Les batteries de la Solid Eye sont maintenant comparées comme le reste des statistiques. Correction d'un faux positif rouge/vert sur les objets à quantité variable (ex. Ration) qui ne devrait dépendre que d'être possédé ou non, pas du nombre exact. Onglet Emblèmes déplacé en dernière position, coins arrondis sur la barre d'onglets."),
     ("V4.3", "7 septembre 2026", "Nouvelle fonctionnalité : comparer sa sauvegarde actuelle à n'importe quelle autre. Sur tous les onglets, rouge = possédé ici mais pas sur la sauvegarde de comparaison, vert = l'inverse. La sauvegarde de comparaison est mise en évidence dans la liste, et le sélecteur reprend le même format (vignette, difficulté, temps de jeu...) que la liste principale."),
@@ -234,9 +236,12 @@ def format_stat_value(key: str, value) -> str:
     if key in FRAME_FIELDS:
         return frames_to_hms_approx(value)
     if key == "objets_speciaux_bitmask":
-        return "Oui" if value else "Non"
+        used = [name for name, bit in mgs4save.SPECIAL_ITEM_USE_BITS.items() if value & (1 << bit)]
+        return f"Oui ({', '.join(used)})" if used else "Non"
     if key in DREBIN_FIELDS:
         return f"{value:,}".replace(",", " ")
+    if key == "posters_vus":
+        return f"{value} / {mgs4save.POSTERS_MAX}"
     return str(value)
 
 
@@ -1055,6 +1060,108 @@ class CollectionDetailDialog(QDialog):
         self.setMinimumWidth(360)
 
 
+class FlowLayout(QLayout):
+    """Layout "tags qui wrap" : place les widgets a la suite, chacun avec
+    sa propre largeur, et retombe a la ligne des que la largeur reelle du
+    conteneur est atteinte - recalcule a chaque redimensionnement (via
+    heightForWidth), contrairement a une grille a nombre de colonnes fixe
+    qui deborde ou laisse des trous des que le contenu/la fenetre change.
+    Chaque ligne completee est centree horizontalement (comme l'etaient
+    les grilles a colonnes fixes qu'il remplace)."""
+
+    def __init__(self, parent=None, hspacing=6, vspacing=6):
+        super().__init__(parent)
+        self._hspacing = hspacing
+        self._vspacing = vspacing
+        self._items: list = []
+        # Index (dans _items) avant lequel un saut de ligne est force,
+        # meme si l'item suivant tiendrait encore sur la ligne courante -
+        # utilise pour WEAPON_ROW_BREAK_IDS (ex. les couleurs de grenade
+        # fumigene doivent rester groupees sur leur propre ligne).
+        self._break_before: set[int] = set()
+
+    def add_widget(self, widget, force_break=False):
+        if force_break:
+            self._break_before.add(len(self._items))
+        self.addWidget(widget)
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, index):
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index):
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def expandingDirections(self):
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        margins = self.contentsMargins()
+        return size + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+
+    def _do_layout(self, rect, test_only):
+        margins = self.contentsMargins()
+        effective = rect.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom())
+        y = effective.y()
+        line_height = 0
+        line_items: list = []  # (item, width, height)
+
+        def line_width(items):
+            if not items:
+                return 0
+            return sum(w for _, w, _ in items) + self._hspacing * (len(items) - 1)
+
+        def flush_line():
+            nonlocal y, line_height
+            if not line_items:
+                return
+            offset = max(0, (effective.width() - line_width(line_items)) // 2)
+            cx = effective.x() + offset
+            for item, w, h in line_items:
+                if not test_only:
+                    item.setGeometry(QRect(QPoint(cx, y), QSize(w, h)))
+                cx += w + self._hspacing
+            y += line_height + self._vspacing
+            line_items.clear()
+            line_height = 0
+
+        for i, item in enumerate(self._items):
+            if i in self._break_before:
+                flush_line()
+            size = item.sizeHint()
+            if line_items and line_width(line_items) + self._hspacing + size.width() > effective.width():
+                flush_line()
+            line_items.append((item, size.width(), size.height()))
+            line_height = max(line_height, size.height())
+        flush_line()
+
+        total_height = y - effective.y()
+        if total_height > 0:
+            total_height -= self._vspacing  # pas d'espacement apres la derniere ligne
+        return total_height + margins.top() + margins.bottom()
+
+
 class CollectionPanel(QWidget):
     """Panneau generique pour une collection d'objets a 2 etats (obtenu /
     verrouille) : reutilise pour Camouflages, Statuettes et Chansons. Les
@@ -1281,15 +1388,8 @@ class WeaponsPanel(CollectionPanel):
 
     TARGET_WEAPONS = 70
     TARGET_ACCESSORIES = 18
-    WEAPON_COLUMNS = 8
     WEAPON_BUTTON_SIZE = (105, 50)
-    ACCESSORY_COLUMNS = 5
     ACCESSORY_BUTTON_SIZE = (170, 50)
-    # Groupe a 8 entrees pile : sur une seule ligne de WEAPON_COLUMNS, la
-    # largeur totale (tuiles elargies par les noms les plus longs du
-    # groupe, ex. "Tanegashima") deborde le panneau et force un scroll
-    # horizontal. Colonnes reduites pour repartir sur 2 lignes.
-    ASSAULT_RIFLE_COLUMNS = 4
 
     def __init__(self):
         super().__init__(
@@ -1334,31 +1434,32 @@ class WeaponsPanel(CollectionPanel):
         for group_name, group_entries in groups.items():
             if group_name in ("Accessoire", "Non identifiée"):
                 continue
-            columns = self.ASSAULT_RIFLE_COLUMNS if group_name == "Fusil d'assaut" else self.WEAPON_COLUMNS
-            self._add_group(group_name, group_entries, columns, self.WEAPON_BUTTON_SIZE)
+            self._add_group(group_name, group_entries, self.WEAPON_BUTTON_SIZE)
 
         self._add_section_title(f"ACCESSOIRES ({owned_accessories} / {self.TARGET_ACCESSORIES})")
-        self._add_group("Accessoire", groups.get("Accessoire", []), self.ACCESSORY_COLUMNS, self.ACCESSORY_BUTTON_SIZE, show_header=False)
+        self._add_group("Accessoire", groups.get("Accessoire", []), self.ACCESSORY_BUTTON_SIZE, show_header=False)
 
         if groups.get("Non identifiée"):
-            self._add_group("Non identifiée", groups["Non identifiée"], self.WEAPON_COLUMNS, self.WEAPON_BUTTON_SIZE)
+            self._add_group("Non identifiée", groups["Non identifiée"], self.WEAPON_BUTTON_SIZE)
 
     def _add_section_title(self, text):
         title = QLabel(text)
         title.setObjectName("title")
         self.sections.addWidget(title)
 
-    def _add_group(self, group_name, group_entries, columns, button_size, show_header=True):
+    def _add_group(self, group_name, group_entries, button_size, show_header=True):
         if show_header:
             label = QLabel(group_name.upper())
             label.setObjectName("groupTitle")
             self.sections.addWidget(label)
 
-        grid_widget = QWidget()
-        grid = QGridLayout(grid_widget)
-        grid.setSpacing(6)
-        for col in range(columns):
-            grid.setColumnStretch(col, 0)
+        # FlowLayout plutot qu'une grille a colonnes fixes : wrap
+        # dynamiquement selon la largeur reelle du panneau (responsive),
+        # au lieu de deborder ou laisser des trous des qu'un groupe tombe
+        # pile sur un multiple du nombre de colonnes fixe (ex. 8 fusils
+        # d'assaut sur 8 colonnes = 1 seule ligne qui debordait).
+        flow_widget = QWidget()
+        flow = FlowLayout(flow_widget)
 
         # Premiere passe : cree les boutons et mesure, avec leur police
         # reelle (gras inclus pour les items obtenus), la largeur qu'il leur
@@ -1394,17 +1495,14 @@ class WeaponsPanel(CollectionPanel):
         # ligne plutot que de se retrouver coupees en fin de ligne
         # precedente. Les autres entrees de WEAPON_SORT_OVERRIDE (ex.
         # Mk.2/Operator) se reordonnent seulement, sans sauter de ligne.
-        row, col = 0, 0
         started_override_row = False
         for weapon_id, btn, name, fm, drebin_locked in buttons:
-            if weapon_id in mgs4save.WEAPON_ROW_BREAK_IDS and not started_override_row:
+            force_break = weapon_id in mgs4save.WEAPON_ROW_BREAK_IDS and not started_override_row
+            if force_break:
                 started_override_row = True
-                if col != 0:
-                    row += 1
-                    col = 0
             btn.setFixedSize(int(tile_width), button_size[1])
             btn.setText(_wrap_button_text(fm, name, (tile_width - 20) / TILE_TEXT_SAFETY_FACTOR))
-            grid.addWidget(btn, row, col)
+            flow.add_widget(btn, force_break=force_break)
             if drebin_locked:
                 dot = QWidget(btn)
                 dot.setFixedSize(9, 9)
@@ -1413,23 +1511,8 @@ class WeaponsPanel(CollectionPanel):
                 dot.setAttribute(Qt.WA_TransparentForMouseEvents, True)
                 dot.setToolTip("Acquise mais verrouillée chez Drebin")
                 dot.show()
-            col += 1
-            if col >= columns:
-                col = 0
-                row += 1
 
-        # Colonnes non etirees (ci-dessus) => grid_widget ne prend que la
-        # largeur necessaire a son contenu ; les stretch de part et d'autre
-        # centrent ce bloc compact dans le panneau, au lieu de l'etaler ou
-        # de le coller a gauche quand le groupe a moins d'entrees que
-        # `columns`.
-        row_wrap = QWidget()
-        row_layout = QHBoxLayout(row_wrap)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.addStretch()
-        row_layout.addWidget(grid_widget)
-        row_layout.addStretch()
-        self.sections.addWidget(row_wrap)
+        self.sections.addWidget(flow_widget)
 
 
 class MainWindow(QMainWindow):

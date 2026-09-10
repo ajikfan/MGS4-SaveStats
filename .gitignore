@@ -6,6 +6,5 @@ themes/*.png
 !themes/README.md
 build/
 dist/
-*.spec
 MGS4.CT
 *.zip
