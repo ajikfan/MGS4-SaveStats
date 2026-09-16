@@ -61,8 +61,12 @@ Fond d'écran personnalisable : voir `themes/README.md`.
 ## Empaqueter en .exe autonome
 
 ```
-python -m PyInstaller --name "MGS4SaveStats" --windowed --onedir --noupx --noconfirm gui_app.py
+python -m PyInstaller --noconfirm MGS4SaveStats.spec
 ```
+
+Utiliser le fichier `.spec` fourni (pas une commande PyInstaller "à la main")
+est important : il embarque l'icône de l'exe et le dossier `assets/`
+(nécessaire à l'icône affichée dans la fenêtre au runtime).
 
 Le résultat est dans `dist/MGS4SaveStats/` (dossier complet à copier, pas
 juste l'exe — mode `--onedir` choisi plutôt que `--onefile` pour réduire
