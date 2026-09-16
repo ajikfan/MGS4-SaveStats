@@ -1763,6 +1763,61 @@ haute :
   toute nouvelle partie, en sauvegardant (avec backup local à chaque
   fois) après CHAQUE poster individuellement pour isoler les flags un
   par un plutôt qu'en bloc.
+  **Suite et 2e infirmation (2026-09-12/13, autre partie n°6)** : la
+  méthode "un backup par poster" a bien été appliquée cette fois-ci
+  (saves à 0, 2, 3 et 4 posters, toutes comparées deux à deux). Un
+  cluster prometteur avait émergé entre les saves à 0 et 2 posters :
+  `0x634c` et `0x6418` passant tous deux de `0` à `1`, seuls candidats
+  après filtrage exhaustif du bruit de zone (plusieurs nouvelles zones
+  de bruit générique découvertes au passage : `0x51ad`-`0x5216`,
+  `0x6890`-`0x6a00` rempli de `162` répété en masse, `0x4ba4`/`0x4bb4`
+  déjà vus bouger lors du test "copain avec les rebelles"). Mais :
+  - Entre 2 et 3 posters (même nom de zone affiché, sous-zone
+    différente, 657 octets de bruit générique mais un vrai flush a eu
+    lieu) : AUCUN changement dans le cluster, et aucun autre candidat
+    fiable trouvé après filtrage (un candidat isolé `0x3ab` s'est
+    montré non-monotone donc écarté).
+  - Sur une toute nouvelle save où l'utilisateur affirme avoir les 4
+    posters, tant que le nom de zone affiché ne changeait pas, le
+    cluster restait figé - cohérent avec "pas encore flush".
+  - Mais après un vrai changement de zone nommée (confirmé), le
+    cluster est resté figé à l'identique (`0x634c`=1, `0x6418`=1,
+    `0x636c`=0, `0x6414`=0) malgré les 4 posters. Le flush a donc bien
+    eu lieu (changement de zone réel), et RIEN n'a bougé.
+  **Conclusion : piste du cluster `0x634c`/`0x636c`/`0x6414`/`0x6418`
+  définitivement infirmée.** Le changement observé sur `2F98B` (session
+  du 2026-09-10, `0x636c` 0->2 et `0x6414` 0->1 entre 2 et 4 posters)
+  était très probablement une coïncidence liée à un autre événement de
+  progression de cette partie-là, pas causé par les posters. Par
+  extension, `0x634c`/`0x6418` (changés entre 0 et 2 posters sur la
+  partie du 2026-09-10) sont eux aussi suspects de coïncidence, malgré
+  leur stabilité apparente sur plusieurs saves. À ce stade, aucune
+  piste fiable n'a été trouvée pour ce compteur - repartir de zéro si
+  l'occasion se représente, idéalement avec un seul poster vu par test
+  et le moins d'autres actions possible entre les saves comparées.
+- **Flashbacks distincts vus (2026-09-13)** : `flashbacks_vues` (`0x5a34`)
+  est un compteur d'OCCURRENCES total (peut revoir le même flashback
+  plusieurs fois), pas le nombre de flashbacks distincts vus au moins
+  une fois - les deux ne sont pas déductibles l'un de l'autre. Piste
+  trouvée pour ce 2e nombre : zone `0x5a44`-`0x5a64` (au moins, à
+  confirmer si elle va plus loin), entièrement à `0` sur une partie
+  neuve, remplie de bits épars sur une partie avancée (191 bits actifs
+  sur 264 disponibles pour une save de la partie n°6, playtime 16199s).
+  Comportement cohérent avec un bitmask "flashback distinct vu" : reste
+  PARFAITEMENT stable sur toute une partie (580FF à 64E18) pendant que
+  `flashbacks_vues` grimpe de 235 à 255 occurrences - donc uniquement
+  des revisionnages de flashbacks déjà vus sur cette période, aucun bit
+  n'a dû changer, et aucun n'a changé. Pas encore de test isolé (un
+  seul nouveau flashback entre deux saves) pour confirmer la
+  granularité exacte bit-par-bit. Nombre total réel de flashbacks dans
+  le jeu incertain - le "65" avancé initialement par l'utilisateur
+  était une erreur ; un forum MGS non officiel mentionne plutôt ~245
+  (chaque "flashback" au sens large contiendrait 6 à 8 images/moments
+  qui compteraient chacun séparément), plus cohérent avec nos
+  observations mais à confirmer. À reprendre sur une partie toute
+  fraîche : comparer une save juste avant/après avoir vu UN SEUL
+  flashback pour vérifier qu'exactement un bit change, et déterminer
+  les vraies limites de la zone.
 - `0x29` (DSR-1) - obtenus ensemble avec le D.E. à l'époque (0x08 et 0x29
   flushaient en même temps), attribution par convention, toujours pas
   isolé depuis. **D.E. (`0x08`) passé en confiance haute le 2026-09-09** :
@@ -1793,3 +1848,49 @@ haute :
 - Confirmer si le Mosin-Nagant a bien le même schéma de bloc que le
   Mk.2 (standard/Hurlement/Rire/Rage/Pleurs) en testant Rage/Peur/
   Pleurs pour le Mosin sur une partie où son bloc n'est pas encore créé.
+
+## Chansons débloquées "à vie" au niveau du compte, pas par partie (2026-09-13)
+
+Sur une toute nouvelle partie fraîche (partie n°0, Acte 1, 155s de jeu),
+5 chansons apparaissent déjà "owned" dans le fichier : Subsistence
+Action, Gekko, Desperate Chase, Midnight Shadow, Mobs Alive - toutes
+déjà présentes dans l'iPod en jeu (confirmé par l'utilisateur pour
+Desperate Chase). Ce sont exactement les chansons déjà notées
+"suspectes" plus haut (absentes de la source de référence externe,
+`0x5f`/`0x60`/`0x61`/`0x62` + `0x55` Subsistence Action) - PAS un bug
+d'identification : ces chansons ont probablement été débloquées sur
+une partie précédente de l'utilisateur et restent acquises à vie,
+peu importe la partie en cours. Cohérent avec un mécanisme déjà
+observé ailleurs (Costume d'Altaïr `0x1d` et l'arme bonus `0x4e`,
+tous deux liés à une fin de partie complétée puis disponibles sur
+les parties suivantes). Ne pas reconfondre ça avec un vrai souci
+d'ID si ça ressort dans une future session - le comportement de
+l'app est correct, c'est le jeu qui fonctionne ainsi.
+
+## Bitmask des flashbacks confirmé bit-par-image (2026-09-13)
+
+Suite de la piste ouverte plus haut ("Flashbacks distincts vus") : deux
+tests isolés propres sur une partie neuve (partie n°0, saves à 0, puis 1,
+puis 2 flashbacks vus par l'utilisateur, en évitant tout autre
+changement significatif entre chaque save) confirment le mécanisme :
+
+- 1er flashback vu : `flashbacks_vues` 0->3, et exactement 3 bits
+  s'activent dans la zone `0x5a44`-`0x5a64` (tous les 3 dans le même
+  octet `0x5a64`, bits 3/4/5).
+- 2e flashback vu : `flashbacks_vues` 3->8 (+5), et exactement 5
+  nouveaux bits s'activent (répartis sur 5 octets différents cette
+  fois : `0x5a49`, `0x5a4a`, `0x5a4b`, `0x5a4d`, `0x5a4e`, un bit
+  chacun).
+
+Confirmation solide : `flashbacks_vues` compte les IMAGES individuelles
+composant chaque flashback (pas les scènes au sens narratif - un
+flashback = plusieurs images, ici 3 puis 5), et le bitmask suit
+exactement la même granularité, un bit par image, réparti dans
+l'ensemble de la zone sans ordre groupé apparent par flashback. Les
+mêmes bits (`0x5a64` bits 3-4-5) ont aussi été vérifiés stables et
+actifs sur plusieurs saves bien plus avancées (parties n°5/6/7, NG+
+inclus) - cohérent, puisque ce premier flashback est vu tôt et
+forcément déjà passé sur ces runs. Poursuivre les tests isolés au fil
+de la partie pour cartographier davantage de bits individuels, et
+déterminer la taille réelle totale de la zone (pas encore confirmée
+au-delà de `0x5a64`).

@@ -8,12 +8,13 @@ aucune ecriture dans les fichiers de save.
 import ctypes
 import datetime
 import html
+import math
 import os
 import sys
 from ctypes import wintypes
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QDialog,
     QCheckBox,
+    QToolTip,
 )
 
 import mgs4save
@@ -45,8 +47,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.6"
+APP_VERSION = "V4.7"
 APP_CHANGELOG = [
+    ("V4.7", "16 septembre 2026", "Ajout d'une barre de progression dorée sous chaque onglet de collection et chaque sous-groupe (armes, objets, gilets, facecamos...), avec compteurs \"X / X\" sur tous les sous-groupes d'armes. Sur l'onglet Emblèmes, segments blancs pulsants indiquant les emblèmes qu'il est encore possible d'obtenir en terminant la partie en cours, avec info-bulle et clic pour ouvrir le détail. Correction de la condition de déblocage de la chanson \"Subsistence Action\". Corrections de fiabilité : sélection de sauvegarde parfois erronée juste après un rafraîchissement, suppression de toute une plage de sauvegardes, et comparaison avec une sauvegarde devenue introuvable."),
     ("V4.6", "10 septembre 2026", "Affichage des armes/accessoires entièrement revu pour s'adapter à la taille de la fenêtre (fini le défilement horizontal, peu importe le nombre d'entrées dans un groupe). Onglet Stats : le nombre de posters vus affiche désormais \"X / 4\", et \"Objets spéciaux utilisés\" liste maintenant lesquels (Bandana, Camouflage optique) plutôt qu'un simple Oui/Non. Le Costume d'Altaïr est enfin détecté correctement (n'affichait jamais son vrai statut auparavant). Nouvelle icône de l'application."),
     ("V4.5", "9 septembre 2026", "Correction d'un bug important : actualiser la liste des sauvegardes pouvait changer celle affichée sans prévenir dès qu'une nouvelle sauvegarde apparaissait plus haut dans la liste (il fallait actualiser deux fois pour que ça se stabilise). Mode comparaison : le bouton \"Comparer\" est désormais masqué sur la sauvegarde actuellement affichée (comparer une sauvegarde à elle-même n'a pas de sens) et coloré en vert. Corrections d'identifications : FIM-92A, D.E. et M60E4 confirmés par tests isolés ; Sachet à gaz somnifère, Tanegashima et Silencieux Mk.23 ajoutés à titre d'hypothèse (confiance basse, à confirmer) ; \"Arme de chasse\" reclassée parmi les armes de poing. Affichage : les fusils d'assaut sont répartis sur 2 lignes pour éviter un défilement horizontal."),
     ("V4.4", "8 septembre 2026", "Mode comparaison : le choix de la sauvegarde de référence se fait désormais directement via un bouton \"Comparer\" sur chaque ligne de la liste (vert, absent sur la sauvegarde actuellement affichée), qui remplace le bouton \"Comparer avec…\" et son sélecteur dédié — recliquer sur la sauvegarde de comparaison annule la comparaison. Les batteries de la Solid Eye sont maintenant comparées comme le reste des statistiques. Correction d'un faux positif rouge/vert sur les objets à quantité variable (ex. Ration) qui ne devrait dépendre que d'être possédé ou non, pas du nombre exact. Onglet Emblèmes déplacé en dernière position, coins arrondis sur la barre d'onglets."),
@@ -167,7 +170,6 @@ STAT_GROUPS = [
             ("pages_magazine_tournees", "Pages de magazine tournées"),
             ("objets_speciaux_bitmask", "Objets spéciaux utilisé"),
             ("flashbacks_vues", "Flashbacks vus"),
-            ("posters_vus", "Posters vus"),
             ("seringue_scanning_plug", "Seringue / Scanning Plug"),
             ("holdups", "Hold-ups"),
             ("body_searches", "Fouilles corporelles"),
@@ -240,8 +242,6 @@ def format_stat_value(key: str, value) -> str:
         return f"Oui ({', '.join(used)})" if used else "Non"
     if key in DREBIN_FIELDS:
         return f"{value:,}".replace(",", " ")
-    if key == "posters_vus":
-        return f"{value} / {mgs4save.POSTERS_MAX}"
     return str(value)
 
 
@@ -527,6 +527,15 @@ class SlotListPanel(QWidget):
         # recente apparait en tete de liste (bug constate par l'utilisateur :
         # le 1er "Actualiser" changeait de sauvegarde, le 2e la gardait).
         target_path = self._selected_path
+        # clear() lui-meme peut emettre currentItemChanged de facon
+        # transitoire pendant qu'il vide la liste item par item (pointant
+        # vers un item sur le point d'etre supprime, pas vers la selection
+        # finale voulue) - _on_current_item_changed reagirait a chacun de
+        # ces signaux intermediaires et ecraserait self._current_slot dans
+        # MainWindow avec une valeur perimee. Signaux bloques pendant tout
+        # le vidage/reconstruction, reactives juste avant le setCurrentRow
+        # final pour que UN SEUL signal, avec l'etat correct, soit emis.
+        self.list_widget.blockSignals(True)
         self.list_widget.clear()
         restore_row = None
         for i, (slot, summary) in enumerate(slots_with_summary):
@@ -553,6 +562,7 @@ class SlotListPanel(QWidget):
             item.setSizeHint(row.sizeHint())
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, row)
+        self.list_widget.blockSignals(False)
         if self.list_widget.count():
             self.list_widget.setCurrentRow(restore_row if restore_row is not None else 0)
 
@@ -869,6 +879,11 @@ class EmblemsPanel(QWidget):
         self.header.setObjectName("title")
         outer.addWidget(self.header)
 
+        self.progress_bar = ProgressBar()
+        self.progress_bar.segment_clicked.connect(self._on_progress_segment_clicked)
+        outer.addWidget(self.progress_bar)
+        self._projected_emblems_by_label = {}
+
         self._base_subtitle = (
             "Doré + bordure = obtenu sur cette partie. Doré sans bordure = obtenu sur une partie précédente.\n"
             "Gris + bordure = serait obtenu en terminant maintenant. Gris sans bordure = encore possible. "
@@ -898,6 +913,7 @@ class EmblemsPanel(QWidget):
             child = self.grid.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+        self._projected_emblems_by_label = {}
 
         obtained_ids = mgs4save.read_obtained_emblems(slot.mgs4_sav)
         emblems = mgs4save.compute_emblems(slot.mgs4_sav, slot.metadata_sav)
@@ -911,6 +927,7 @@ class EmblemsPanel(QWidget):
         self.subtitle.setText(
             f"{self._base_subtitle}\n{COMPARE_MODE_HINT}" if obtained_ids_compare is not None else self._base_subtitle
         )
+        projected_labels = []
         for i, emblem in enumerate(emblems):
             emblem = dict(emblem)
             emblem["obtained"] = emblem["id"] in obtained_ids
@@ -927,6 +944,9 @@ class EmblemsPanel(QWidget):
                 emblem["unlocked"] and emblem["has_reliable_min_condition"]
             )
             emblem["projected"] = emblem["unlocked"] and not emblem["obtained"]
+            if emblem["projected"]:
+                projected_labels.append(emblem["name"])
+                self._projected_emblems_by_label[emblem["name"]] = emblem
             emblem["only_here"] = obtained_ids_compare is not None and emblem["obtained"] and emblem["id"] not in obtained_ids_compare
             emblem["only_compare"] = obtained_ids_compare is not None and not emblem["obtained"] and emblem["id"] in obtained_ids_compare
             btn = QPushButton(f"{emblem['id']:02d}\n{emblem['name']}")
@@ -947,9 +967,15 @@ class EmblemsPanel(QWidget):
             btn.setMinimumSize(130, 64)
             btn.clicked.connect(lambda _checked=False, e=emblem: self._show_dialog(e))
             self.grid.addWidget(btn, i // self.COLUMNS, i % self.COLUMNS)
+        self.progress_bar.set_progress(len(obtained_ids), len(emblems), projected_labels)
 
     def _show_dialog(self, emblem):
         EmblemDialog(emblem, self).exec()
+
+    def _on_progress_segment_clicked(self, label):
+        emblem = self._projected_emblems_by_label.get(label)
+        if emblem is not None:
+            self._show_dialog(emblem)
 
 
 class HelpDialog(QDialog):
@@ -1162,6 +1188,145 @@ class FlowLayout(QLayout):
         return total_height + margins.top() + margins.bottom()
 
 
+class ProgressBar(QWidget):
+    """Barre de progression doree (obtenu/total) pour un onglet ou un
+    groupe. Support optionnel de segments "projetes" (obtenus en
+    terminant la partie maintenant, ex. emblemes deja eligibles) : chacun
+    occupe une unite de la barre, en blanc, pulsant doucement vers le
+    noir pour attirer l'oeil, avec son propre libelle affiche au survol.
+    Le pulse tourne uniquement pendant que la barre est visible (mise en
+    pause automatiquement via hide/showEvent des qu'un autre onglet est
+    actif) pour ne pas consommer de CPU pour rien en arriere-plan."""
+
+    HEIGHT = 8
+    _GOLD = QColor(201, 162, 75)
+    _EMPTY = QColor(255, 255, 255, 25)
+
+    # Emis avec le libelle du segment "projete" (ex. nom d'embleme) quand
+    # on clique dessus - sans effet si le segment cliqué n'a pas de label
+    # (les segments dores/vides ne sont pas cliquables).
+    segment_clicked = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(self.HEIGHT)
+        self.setMouseTracking(True)
+        self._owned = 0
+        self._total = 1
+        self._projected_labels: list[str] = []
+        self._pulse_phase = 0.0
+        self._timer: QTimer | None = None
+
+    def set_progress(self, owned, total, projected_labels=None):
+        self._owned = owned
+        self._total = max(total, 1)
+        self._projected_labels = list(projected_labels or [])
+        self._sync_timer()
+        self.update()
+
+    def _sync_timer(self):
+        needs_timer = bool(self._projected_labels) and self.isVisible()
+        if needs_timer and self._timer is None:
+            self._timer = QTimer(self)
+            self._timer.timeout.connect(self._tick)
+            self._timer.start(40)
+        elif not needs_timer and self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+
+    def _tick(self):
+        self._pulse_phase = (self._pulse_phase + 0.18) % (2 * math.pi)
+        self.update()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._sync_timer()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._sync_timer()
+
+    def _segments(self):
+        """Liste (x, width, color, label_ou_None) de gauche a droite, en
+        pixels, pour l'etat actuel et la largeur actuelle du widget.
+        "owned" et les "projected_labels" sont deux ensembles disjoints
+        (un embleme projete n'est par definition pas encore obtenu) : le
+        segment blanc s'ajoute apres le dore, il ne le remplace pas."""
+        w = self.width()
+        unit = w / self._total
+        segments: list = []
+        x = 0.0
+        gold_width = unit * self._owned
+        if gold_width > 0:
+            segments.append((x, gold_width, self._GOLD, None))
+        x += gold_width
+        pulse = (math.sin(self._pulse_phase) + 1) / 2  # 0..1
+        white_level = int(60 + pulse * 195)  # va-et-vient noir <-> blanc
+        pulse_color = QColor(white_level, white_level, white_level)
+        for label in self._projected_labels:
+            segments.append((x, unit, pulse_color, label))
+            x += unit
+        return segments
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect()
+        radius = rect.height() / 2
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self._EMPTY)
+        painter.drawRoundedRect(rect, radius, radius)
+        painter.setClipPath(self._rounded_path(rect, radius))
+        gap = 2  # separation nette entre segments "projetes" adjacents
+        for x, width, color, label in self._segments():
+            painter.setBrush(color)
+            # Bords gauche/droit arrondis independamment puis largeur
+            # derivee de leur difference (pas l'inverse) : arrondir
+            # position ET largeur separement accumule des erreurs qui ne
+            # se compensent pas de facon uniforme d'un segment a l'autre
+            # (ecart visuel differant du 1er au 2e segment vs les
+            # suivants, repere par l'utilisateur).
+            if label is not None:
+                left = round(x + gap / 2)
+                right = round(x + width - gap / 2)
+            else:
+                left = round(x)
+                right = round(x + width)
+            painter.drawRect(left, 0, max(right - left, 1), rect.height())
+
+    def _rounded_path(self, rect, radius):
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+        return path
+
+    def _label_at(self, pos):
+        for x, width, _color, label in self._segments():
+            if label is not None and x <= pos.x() <= x + width:
+                return label
+        return None
+
+    def event(self, e):
+        if e.type() == QEvent.ToolTip:
+            label = self._label_at(e.pos())
+            if label is not None:
+                QToolTip.showText(e.globalPos(), label, self)
+            else:
+                QToolTip.hideText()
+            return True
+        return super().event(e)
+
+    def mousePressEvent(self, event):
+        label = self._label_at(event.position().toPoint())
+        if label is not None:
+            self.segment_clicked.emit(label)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        is_clickable = self._label_at(event.position().toPoint()) is not None
+        self.setCursor(Qt.PointingHandCursor if is_clickable else Qt.ArrowCursor)
+        super().mouseMoveEvent(event)
+
+
 class CollectionPanel(QWidget):
     """Panneau generique pour une collection d'objets a 2 etats (obtenu /
     verrouille) : reutilise pour Camouflages, Statuettes et Chansons. Les
@@ -1193,6 +1358,9 @@ class CollectionPanel(QWidget):
         self.header = QLabel(title)
         self.header.setObjectName("title")
         outer.addWidget(self.header)
+
+        self.progress_bar = ProgressBar()
+        outer.addWidget(self.progress_bar)
 
         self.subtitle = QLabel(subtitle)
         self.subtitle.setObjectName("placeholder")
@@ -1237,6 +1405,7 @@ class CollectionPanel(QWidget):
             only_compare = sum(e.get("only_compare", False) for e in entries)
             header_text += f" — {only_here} en rouge, {only_compare} en vert"
         self.header.setText(header_text)
+        self.progress_bar.set_progress(owned, total)
         self.subtitle.setText(
             f"{self._base_subtitle} {COMPARE_MODE_HINT}" if compare_slot is not None else self._base_subtitle
         )
@@ -1254,6 +1423,9 @@ class CollectionPanel(QWidget):
                 label = QLabel(f"{group_name.upper()} ({group_owned} / {group_total})")
                 label.setObjectName("groupTitle")
                 self.sections.addWidget(label)
+                group_bar = ProgressBar()
+                group_bar.set_progress(group_owned, group_total)
+                self.sections.addWidget(group_bar)
 
             grid_widget = QWidget()
             grid = QGridLayout(grid_widget)
@@ -1428,6 +1600,7 @@ class WeaponsPanel(CollectionPanel):
             only_compare = sum(e.get("only_compare", False) for e in entries)
             header_text += f" — {only_here} en rouge, {only_compare} en vert"
         self.header.setText(header_text)
+        self.progress_bar.set_progress(owned_weapons, self.TARGET_WEAPONS)
         self.subtitle.setText(
             f"{self._base_subtitle} {COMPARE_MODE_HINT}" if compare_slot is not None else self._base_subtitle
         )
@@ -1436,22 +1609,29 @@ class WeaponsPanel(CollectionPanel):
                 continue
             self._add_group(group_name, group_entries, self.WEAPON_BUTTON_SIZE)
 
-        self._add_section_title(f"ACCESSOIRES ({owned_accessories} / {self.TARGET_ACCESSORIES})")
+        self._add_section_title(f"ACCESSOIRES ({owned_accessories} / {self.TARGET_ACCESSORIES})", owned_accessories, self.TARGET_ACCESSORIES)
         self._add_group("Accessoire", groups.get("Accessoire", []), self.ACCESSORY_BUTTON_SIZE, show_header=False)
 
         if groups.get("Non identifiée"):
             self._add_group("Non identifiée", groups["Non identifiée"], self.WEAPON_BUTTON_SIZE)
 
-    def _add_section_title(self, text):
+    def _add_section_title(self, text, owned, total):
         title = QLabel(text)
         title.setObjectName("title")
         self.sections.addWidget(title)
+        bar = ProgressBar()
+        bar.set_progress(owned, total)
+        self.sections.addWidget(bar)
 
     def _add_group(self, group_name, group_entries, button_size, show_header=True):
         if show_header:
-            label = QLabel(group_name.upper())
+            group_owned = sum(1 for e in group_entries if e["owned"])
+            label = QLabel(f"{group_name.upper()} ({group_owned} / {len(group_entries)})")
             label.setObjectName("groupTitle")
             self.sections.addWidget(label)
+            group_bar = ProgressBar()
+            group_bar.set_progress(group_owned, len(group_entries))
+            self.sections.addWidget(group_bar)
 
         # FlowLayout plutot qu'une grille a colonnes fixes : wrap
         # dynamiquement selon la largeur reelle du panneau (responsive),
@@ -1617,7 +1797,25 @@ class MainWindow(QMainWindow):
             slots = save_finder.find_all_slots()
         else:
             slots = save_finder.list_save_slots(self._current_folder)
-        self._apply_slots(slots + self._imported_slots)
+        all_slots = slots + self._imported_slots
+        if not all_slots:
+            # Plus aucune sauvegarde (ex. suppression de tout un groupe) :
+            # sans ça, self._current_slot/_compare_slot restaient des
+            # references fantomes vers des fichiers qui n'existent plus,
+            # et list_panel n'avait plus rien a selectionner - source du
+            # bug signale par l'utilisateur ("cherche a selectionner une
+            # sauvegarde non existante").
+            self._current_slot = None
+            self._compare_slot = None
+            self.list_panel.set_compare_active(False)
+            self._current_slots_with_summary = []
+            self.list_panel.set_slots([])
+            QMessageBox.information(
+                self, "Aucune sauvegarde",
+                "Plus aucune sauvegarde trouvée dans ce dossier.",
+            )
+            return
+        self._apply_slots(all_slots)
 
     def change_folder(self, auto_failed=False):
         if auto_failed:
@@ -1653,8 +1851,16 @@ class MainWindow(QMainWindow):
         self.refresh_current()
 
     def delete_slot(self, slot):
-        summary = mgs4save.read_metadata_summary(slot.metadata_sav)
-        siblings = self._find_same_playthrough_siblings(slot, summary)
+        try:
+            summary = mgs4save.read_metadata_summary(slot.metadata_sav)
+            siblings = self._find_same_playthrough_siblings(slot, summary)
+        except OSError:
+            QMessageBox.warning(
+                self, "Sauvegarde introuvable",
+                "Cette sauvegarde a disparu ou est illisible (supprimée ou en cours d'écriture par le jeu). Actualisation de la liste.",
+            )
+            self.refresh_slots()
+            return
         dialog = ConfirmDeleteDialog(slot, summary, sibling_count=len(siblings), parent=self)
         if dialog.exec() != QDialog.Accepted:
             return
@@ -1704,7 +1910,13 @@ class MainWindow(QMainWindow):
         segment: list = []
         prev_values = None
         for s, sm in candidates:
-            stats = mgs4save.read_stats(s.mgs4_sav)
+            try:
+                stats = mgs4save.read_stats(s.mgs4_sav)
+            except OSError:
+                # Candidat devenu illisible entre le listage et ce calcul -
+                # ignore plutot que de faire planter tout le groupe (voir
+                # _apply_slots, meme logique).
+                continue
             values = tuple(stats[f] for f in self.MONOTONIC_STAT_FIELDS) + (sm["playtime_secondes"],)
             if prev_values is not None and any(v < pv for v, pv in zip(values, prev_values)):
                 if any(s2.path == slot.path for s2 in segment):
@@ -1775,9 +1987,17 @@ class MainWindow(QMainWindow):
         self._activate_compare(slot)
 
     def _activate_compare(self, chosen):
+        try:
+            summary = mgs4save.read_metadata_summary(chosen.metadata_sav)
+            progress = mgs4save.read_progress_info(chosen.mgs4_sav)
+        except OSError:
+            QMessageBox.warning(
+                self, "Sauvegarde introuvable",
+                "Cette sauvegarde a disparu ou est illisible (supprimée ou en cours d'écriture par le jeu). Actualisation de la liste.",
+            )
+            self.refresh_slots()
+            return
         self._compare_slot = chosen
-        summary = mgs4save.read_metadata_summary(chosen.metadata_sav)
-        progress = mgs4save.read_progress_info(chosen.mgs4_sav)
         label = f"{summary['difficulte_nom']}, {format_lieu_acte(progress['lieu'], progress['acte'])}"
         self.list_panel.set_compare_active(True, label, compare_path=chosen.path)
         self.show_stats(self._current_slot)

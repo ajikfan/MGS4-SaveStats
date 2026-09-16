@@ -1166,7 +1166,10 @@ SONG_CONDITIONS = {
     "The Essence of Vince": "Acte 3, combat contre Raging Raven, en haut de la tour, sur le balcon.",
     "Test Subjects Duality": "Acte 3, juste à droite de l'arrivée, avant l'apparition d'un membre de la résistance.",
     "Theme of Tara": "Acte 1, refuge de la milice, petite chambre après la salle des blessés.",
-    "Subsistence Action": "Bonus : jouer au moins une partie de Metal Gear Online. Effets : fait rager les soldats en CQC, calme les tremblements de mains.",
+    # Condition corrigee (2026-09-10) suite a des retours recents (source
+    # externe, pas un test isole personnel) : ce n'est pas un bonus MGO,
+    # mais une photo prise en jeu.
+    "Subsistence Action": "Acte 3, photographier le membre de la Résistance en train d'uriner dans le parc. Effets : fait rager les soldats en CQC, calme les tremblements de mains.",
     "Shin Bokura no Taiyou Theme": "Disponible dans la cuisine du Nomad dès l'Acte 1.",
     "MPO+ Theme": "Débloquée en aidant les miliciens (Actes 1/2). Effet : fait rire les soldats maîtrisés en CQC.",
     "The Fury": "Acte 2, maison incendiée du village de la vallée de la Cove. Effet : fait rager les soldats maîtrisés en CQC.",
