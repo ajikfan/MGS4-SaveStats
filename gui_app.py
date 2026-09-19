@@ -47,8 +47,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.7"
+APP_VERSION = "V4.8"
 APP_CHANGELOG = [
+    ("V4.8", "19 septembre 2026", "Le nombre réel d'images de flashback dans le jeu est désormais connu (238, confirmé via le trophée \"Flashback Mania\") : nouvelle carte \"Flashbacks\" dans l'onglet Stats avec barre de progression, distinguant les images uniques vues (\"X / 238\") du compteur brut du jeu qui compte aussi les revisionnages (\"Flashbacks déclenchés\"). Réorganisation de l'onglet Stats : nouvelle carte \"Infiltration\" regroupant Alertes, Continues, Hold-ups, Fouilles corporelles et Compliments reçus ; carte \"Divers\" renommée \"Objets\" et recentrée sur les objets utilisés/donnés."),
     ("V4.7", "16 septembre 2026", "Ajout d'une barre de progression dorée sous chaque onglet de collection et chaque sous-groupe (armes, objets, gilets, facecamos...), avec compteurs \"X / X\" sur tous les sous-groupes d'armes. Sur l'onglet Emblèmes, segments blancs pulsants indiquant les emblèmes qu'il est encore possible d'obtenir en terminant la partie en cours, avec info-bulle et clic pour ouvrir le détail. Correction de la condition de déblocage de la chanson \"Subsistence Action\". Corrections de fiabilité : sélection de sauvegarde parfois erronée juste après un rafraîchissement, suppression de toute une plage de sauvegardes, et comparaison avec une sauvegarde devenue introuvable."),
     ("V4.6", "10 septembre 2026", "Affichage des armes/accessoires entièrement revu pour s'adapter à la taille de la fenêtre (fini le défilement horizontal, peu importe le nombre d'entrées dans un groupe). Onglet Stats : le nombre de posters vus affiche désormais \"X / 4\", et \"Objets spéciaux utilisés\" liste maintenant lesquels (Bandana, Camouflage optique) plutôt qu'un simple Oui/Non. Le Costume d'Altaïr est enfin détecté correctement (n'affichait jamais son vrai statut auparavant). Nouvelle icône de l'application."),
     ("V4.5", "9 septembre 2026", "Correction d'un bug important : actualiser la liste des sauvegardes pouvait changer celle affichée sans prévenir dès qu'une nouvelle sauvegarde apparaissait plus haut dans la liste (il fallait actualiser deux fois pour que ça se stabilise). Mode comparaison : le bouton \"Comparer\" est désormais masqué sur la sauvegarde actuellement affichée (comparer une sauvegarde à elle-même n'a pas de sens) et coloré en vert. Corrections d'identifications : FIM-92A, D.E. et M60E4 confirmés par tests isolés ; Sachet à gaz somnifère, Tanegashima et Silencieux Mk.23 ajoutés à titre d'hypothèse (confiance basse, à confirmer) ; \"Arme de chasse\" reclassée parmi les armes de poing. Affichage : les fusils d'assaut sont répartis sur 2 lignes pour éviter un défilement horizontal."),
@@ -150,9 +151,17 @@ STAT_GROUPS = [
             ("headshots", "Headshots"),
             ("ko_couteau", "Kill/KO au couteau"),
             ("cqc", "CQC"),
+            ("combat_high", "Poussées d'adrénaline"),
+        ],
+    ),
+    (
+        "Infiltration",
+        [
             ("alertes", "Alertes"),
             ("continues", "Continues"),
-            ("combat_high", "Poussées d'adrénaline"),
+            ("holdups", "Hold-ups"),
+            ("body_searches", "Fouilles corporelles"),
+            ("praises", "Compliments reçus"),
         ],
     ),
     (
@@ -163,17 +172,20 @@ STAT_GROUPS = [
         ],
     ),
     (
-        "Divers",
+        "Objets",
         [
             ("soins_utilises", "Objets de soin utilisés"),
+            ("objets_speciaux_bitmask", "Objets spéciaux utilisé"),
             ("objets_donnes_milices", "Objets donnés aux milices"),
             ("pages_magazine_tournees", "Pages de magazine tournées"),
-            ("objets_speciaux_bitmask", "Objets spéciaux utilisé"),
-            ("flashbacks_vues", "Flashbacks vus"),
             ("seringue_scanning_plug", "Seringue / Scanning Plug"),
-            ("holdups", "Hold-ups"),
-            ("body_searches", "Fouilles corporelles"),
-            ("praises", "Compliments reçus"),
+        ],
+    ),
+    (
+        "Flashbacks",
+        [
+            ("flashback_images_vues", "Images de flashback vues"),
+            ("flashbacks_vues", "Flashbacks déclenchés"),
         ],
     ),
     (
@@ -184,6 +196,13 @@ STAT_GROUPS = [
         ],
     ),
 ]
+
+# Groupes de STAT_GROUPS pour lesquels la carte affiche en plus une barre
+# de progression dorée (valeur du champ / total visé).
+# group_name -> (champ, total).
+STAT_GROUPS_WITH_PROGRESS = {
+    "Flashbacks": ("flashback_images_vues", mgs4save.FLASHBACK_IMAGES_TOTAL),
+}
 
 # Carte "Temps" a part : melange une valeur de METADATA.SAV (playtime) et
 # des valeurs de MGS4.SAV (frames), assemblee separement dans show_slot().
@@ -240,6 +259,8 @@ def format_stat_value(key: str, value) -> str:
     if key == "objets_speciaux_bitmask":
         used = [name for name, bit in mgs4save.SPECIAL_ITEM_USE_BITS.items() if value & (1 << bit)]
         return f"Oui ({', '.join(used)})" if used else "Non"
+    if key == "flashback_images_vues":
+        return f"{value} / {mgs4save.FLASHBACK_IMAGES_TOTAL}"
     if key in DREBIN_FIELDS:
         return f"{value:,}".replace(",", " ")
     return str(value)
@@ -631,9 +652,12 @@ class StatsPanel(QWidget):
         compare_labels = ("Actuelle", "Comparée") if compare_slot is not None else None
 
         cards = [
-            self._build_card(group_name, [
-                (label, *row_values(key, stats.get(key, 0))) for key, label in fields
-            ], compare_labels)
+            self._build_card(
+                group_name,
+                [(label, *row_values(key, stats.get(key, 0))) for key, label in fields],
+                compare_labels,
+                progress=self._group_progress(group_name, stats),
+            )
             for group_name, fields in STAT_GROUPS
         ]
 
@@ -654,13 +678,25 @@ class StatsPanel(QWidget):
             self.grid.addWidget(card, i // columns, i % columns)
 
     @staticmethod
-    def _build_card(title, rows, compare_labels=None):
+    def _group_progress(group_name, stats):
+        entry = STAT_GROUPS_WITH_PROGRESS.get(group_name)
+        if entry is None:
+            return None
+        field, total = entry
+        return (stats.get(field, 0), total)
+
+    @staticmethod
+    def _build_card(title, rows, compare_labels=None, progress=None):
         card = QFrame()
         card.setObjectName("card")
         card_layout = QVBoxLayout(card)
         group_title = QLabel(title.upper())
         group_title.setObjectName("groupTitle")
         card_layout.addWidget(group_title)
+        if progress is not None:
+            bar = ProgressBar()
+            bar.set_progress(*progress)
+            card_layout.addWidget(bar)
         if compare_labels:
             header = QHBoxLayout()
             header.addStretch()
@@ -1885,6 +1921,7 @@ class MainWindow(QMainWindow):
         "body_searches", "praises", "syringe_uses", "scanning_plug_uses",
         "playboy_pages", "emotion_magazine_pages", "cqc", "headshots",
         "knife_kills", "knife_knockouts", "soins_utilises", "flashbacks_vues",
+        "flashback_images_vues",
     )
 
     def _find_same_playthrough_siblings(self, slot, summary):

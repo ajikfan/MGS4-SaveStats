@@ -82,6 +82,28 @@ STATS = {
 # champ posters_vus lui-meme (voir commentaire "INCERTAIN" ci-dessus).
 POSTERS_MAX = 4
 
+# Bitmask des images de flashback individuelles vues au moins une fois
+# (CONFIANCE HAUTE, voir notes.md "Bitmask des flashbacks confirmé
+# bit-par-image" et "Total réel confirmé via le trophée Flashback
+# Mania"). Un bit = une image de flashback (pas une scène narrative :
+# un flashback "au sens large" contient plusieurs images/bits).
+# Contrairement a `flashbacks_vues` (0x5a34, compteur d'OCCURRENCES qui
+# grimpe a chaque revisionnage, meme d'une image deja vue), ce bitmask
+# ne compte chaque image qu'une seule fois - c'est la vraie mesure de
+# progression "combien de flashbacks distincts ai-je vus".
+# Zone bornee confirmee le 2026-09-19 : tout ce qui suit 0x5a64 est a 0.
+FLASHBACK_BITMASK_OFFSET = 0x5a44
+FLASHBACK_BITMASK_LENGTH = 33  # octets = 264 emplacements de bits
+# Total reel confirme le 2026-09-19 via le trophee Steam "Flashback
+# Mania" (tous les flashbacks vus) : 238 bits actifs sur 264 sur la save
+# la plus avancee de l'utilisateur juste apres l'obtention du trophee,
+# et ce total ne peut plus augmenter. Les 26 bits jamais actives forment
+# un motif stable (deux octets entierement a zero + trois octets
+# partiels), cohérent avec du padding structurel plutot que des
+# flashbacks restants. Remplace l'estimation non officielle de ~245
+# (forum MGS) et la premiere estimation erronee de 65.
+FLASHBACK_IMAGES_TOTAL = 238
+
 # Stats affichees en jeu comme une seule valeur mais stockees comme la somme
 # de deux champs distincts (confirme via zexk/bbtracker, voir notes.md).
 # name -> (champ1, champ2)
@@ -226,6 +248,8 @@ def read_stats(path: str) -> dict:
     }
     for name, (field_a, field_b) in DERIVED_STATS.items():
         values[name] = values[field_a] + values[field_b]
+    flashback_zone = data[FLASHBACK_BITMASK_OFFSET:FLASHBACK_BITMASK_OFFSET + FLASHBACK_BITMASK_LENGTH]
+    values["flashback_images_vues"] = sum(bin(b).count("1") for b in flashback_zone)
     return values
 
 

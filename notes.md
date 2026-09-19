@@ -1894,3 +1894,32 @@ forcément déjà passé sur ces runs. Poursuivre les tests isolés au fil
 de la partie pour cartographier davantage de bits individuels, et
 déterminer la taille réelle totale de la zone (pas encore confirmée
 au-delà de `0x5a64`).
+
+### Total réel confirmé via le trophée "Flashback Mania" (2026-09-19)
+
+L'utilisateur a obtenu le trophée "Flashback Mania" (tous les flashbacks
+vus) sur sa save la plus avancée (`BLJM67001G6AAEA1C9`, `flashbacks_vues`
+= 705 occurrences cumulées). Lecture de la zone `0x5a44`-`0x5a64` sur
+cette save, plus une vérification large au-delà (jusqu'à `0x5ac0`) pour
+confirmer la borne :
+
+- Tout ce qui suit `0x5a64` est à `0` - la zone fait bien exactement
+  **33 octets** (`0x5a44` à `0x5a64` inclus), soit **264 emplacements de
+  bits**, borne désormais confirmée (plus seulement "au moins").
+- **238 bits actifs sur 264**, et ce total ne peut plus augmenter (le
+  trophée signifie que tous les flashbacks du jeu ont été vus au moins
+  une fois). Les 26 bits jamais activés dessinent un motif net et stable :
+  deux octets entièrement à zéro (`0x5a46`, `0x5a47`) et trois octets
+  partiels (`0x5a45` = 4/8, `0x5a48` = 4/8, `0x5a64` = 6/8) - cohérent
+  avec des emplacements de bits structurellement inutilisés (padding),
+  pas des flashbacks restant à voir.
+
+**Le nombre réel total d'images de flashback dans le jeu est donc 238**
+(ni les ~245 avancés par un forum non officiel, ni les 65 de l'estimation
+initiale de l'utilisateur). Reste non résolu : la cartographie bit ->
+flashback narratif précis (quel bit appartient à quelle scène/quel Acte),
+qui nécessiterait de reprendre les tests isolés flashback par flashback
+sur une partie fraîche - gros chantier, à faire uniquement si l'occasion
+se représente. Sans cette cartographie, on peut déjà afficher un compteur
+global fiable "X / 238" mais pas encore un onglet Flashback détaillé par
+Acte/scène.
