@@ -121,6 +121,12 @@ refuse d'écrire plutôt que de risquer de corrompre la mémoire du jeu.
 
 ### Compatibilité / mises à jour du jeu
 
+**À ne pas confondre : deux numérotations indépendantes.** "V1.0" (titre
+de cette section) est la version du trainer lui-même (voir le changelog
+dans le bouton "Aide"). "1.4.1" ci-dessous est la version du jeu MGS4
+avec laquelle il a été testé — rien à voir l'une avec l'autre, elles
+évoluent séparément.
+
 Les adresses mémoire utilisées dépendent de la version exacte de
 `mgs4.exe` : une mise à jour Steam du jeu peut décaler toutes les
 adresses. C'est déjà arrivé une fois (mise à jour du 24 septembre 2026) :
