@@ -3546,6 +3546,15 @@ encore testee (tentative de forcer `1`/`2` par ecriture infructueuse
 comme note ci-dessus, il faudra observer passivement une vraie
 transition en jeu).
 
+**4e etat identifie (2026-09-25) : `3` = Prudence.** Lu en direct
+(`live.read_alert_state()`) pendant que l'utilisateur voyait "Prudence"
+affiche en jeu - valeur qui suit logiquement Evasion (`2`) avant un
+retour a Normal (`0`), coherent avec la sequence habituelle des jeux
+MGS (Normal -> Alerte -> Evasion -> Prudence -> Normal). `ALERT_STATE_
+NAMES` mis a jour dans `live_trainer.py`. Distinction jaune/rouge au
+sein de `1`=Alerte reste, elle, un point ouvert distinct - non resolue
+par cette decouverte.
+
 ### Nouvelle capacité : suspendre/reprendre le process (2026-09-25)
 
 Ajout d'une capacité générale utile pour figer le jeu pendant les tests
@@ -3619,3 +3628,57 @@ frames`/`temps_baril_frames` (u32, peuvent largement depasser 24h de
 jeu cumule). Conversion H/M/S -> frames faite via `FRAMES_PER_SECOND`
 (approximation deja assumee ailleurs, framerate reel variable) et
 plafonnee a la taille reelle du champ (u16 ou u32) avant ecriture.
+
+### Préparation à la publication du trainer sur GitHub (2026-09-25)
+
+En attendant le retour de test du frère de l'utilisateur, préparation du
+trainer pour une publication publique (frère en cours de test de son
+côté, pas encore de confirmation) :
+
+- Nettoyage du repo : suppression des `scratch_*.pkl`/`.json` restants à
+  la racine (dumps de l'enquête Octocamo/Cadavre, formellement close -
+  voir plus haut). Pattern `scratch_*` ajouté au `.gitignore` pour éviter
+  que ça se reproduise silencieusement.
+- README : nouvelle section "Trainer (recherche mémoire live)" (absente
+  jusque-là - seul `gui_app.py` avait une section dédiée), avec
+  prérequis, méthode (chaîne de pointeururs zexk/bbtracker, crédité),
+  avertissements (usage solo, faux positifs antivirus, champs confiance
+  basse, danger du "Mode avancé"), et instructions de compilation.
+- Ajout d'un bouton "Aide" dans le trainer (`HelpDialog`, même esprit que
+  celui de `gui_app.py`) reprenant le même contenu de façon condensée,
+  plus `TRAINER_VERSION = "V1.0"` affiché dans le titre de la fenêtre et
+  dans la popup (le trainer n'avait jusque-là aucun numéro de version).
+- **Version du jeu documentée** (info donnée par l'utilisateur, pas
+  déduite techniquement - `mgs4.exe` n'expose que `1.0.0.1` dans ses
+  métadonnées PE, jamais mis à jour par l'éditeur d'une version à
+  l'autre, donc inutilisable pour distinguer les builds) : le trainer
+  est calibré et testé sur la version Steam **1.4.1** de MGS4, mentionnée
+  dans le README et l'aide in-app. Sert aussi à expliquer le "saut" de
+  `MODULE_PATCH_SHIFT` découvert le 2026-09-24 (voir plus haut) aux
+  futurs lecteurs externes qui n'ont pas suivi la session en direct.
+
+### Munitions masquees pour une arme non possedee + auto-init au deblocage (2026-09-25)
+
+Retour utilisateur sur capture d'écran de l'onglet Armes : plusieurs
+armes affichaient 65535 munitions (sentinelle "jamais initialisee en
+jeu") alors même que le menu Etat indiquait encore "Non poss." (ex.
+Desert Eagle Canon Long, 0x09) - confondant, ressemble a un "verrouille"
+plutot qu'a une simple valeur jamais touchee.
+
+Deux ajustements dans `GroupedWeaponsTab`/`TableTab` (`live_trainer.py`) :
+- `refresh()` grise desormais le controle munitions (comme deja fait
+  quand l'adresse munitions est inconnue) tant que l'arme n'est pas a
+  l'etat "Utilisable" (toujours la derniere entree de `quick_states` par
+  construction, que ce soit le menu a 3 etats des armes normales ou le
+  menu binaire des Accessoires) - plus de 65535 confus affiche pour une
+  arme non possedee.
+- `refresh()` corrige aussi automatiquement 65535 -> 10 pour toute arme
+  deja "Utilisable" a chaque tick (750ms) tant que la sentinelle est
+  encore presente - pas seulement au moment du clic sur le menu Etat.
+  Necessaire car plusieurs armes de l'utilisateur etaient deja
+  debloquees (via une vraie partie, avant l'existence de ce correctif)
+  et restaient donc bloquees a 65535 malgre "Utilisable" affiche - une
+  correction seulement au moment du clic n'aurait jamais rattrape ces
+  cas-la. Idempotent (une fois a 10, le test `== 65535` ne redeclenche
+  plus rien) et sans risque pour un stock deja reel (seule la valeur
+  exacte 65535 est concernee).
