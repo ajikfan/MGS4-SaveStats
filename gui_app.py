@@ -14,7 +14,7 @@ import sys
 from ctypes import wintypes
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap, QIcon
+from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPixmap, QIcon, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -47,8 +47,9 @@ import save_finder
 # Limite du jeu (nombre max de slots de sauvegarde de partie par profil).
 MGS4_MAX_SAVE_SLOTS = 100
 
-APP_VERSION = "V4.8"
+APP_VERSION = "V4.9"
 APP_CHANGELOG = [
+    ("V4.9", "25 septembre 2026", "Les armes pas encore identifiées individuellement ne s'affichent plus du tout (au lieu de \"Arme #NN\"). Nouvelles identifications confirmées par tests isolés : Big Boss (FaceCamo), Desert Eagle (Canon Long), Type 17, Patriot, Tanegashima, DSR-1, Sachet à gaz somnifère, Silencieux Mk.23/Operator, et correction d'une inversion Thor .45-70 / 1911 Modifié. Couleurs de Gilet corrigées (Olive/Noir/Gris/Bleu marine décalées d'un cran, Kaki réassigné). Ajout d'un raccourci clavier F5 pour actualiser."),
     ("V4.8", "19 septembre 2026", "Le nombre réel d'images de flashback dans le jeu est désormais connu (238, confirmé via le trophée \"Flashback Mania\") : nouvelle carte \"Flashbacks\" dans l'onglet Stats avec barre de progression, distinguant les images uniques vues (\"X / 238\") du compteur brut du jeu qui compte aussi les revisionnages (\"Flashbacks déclenchés\"). Réorganisation de l'onglet Stats : nouvelle carte \"Infiltration\" regroupant Alertes, Continues, Hold-ups, Fouilles corporelles et Compliments reçus ; carte \"Divers\" renommée \"Objets\" et recentrée sur les objets utilisés/donnés."),
     ("V4.7", "16 septembre 2026", "Ajout d'une barre de progression dorée sous chaque onglet de collection et chaque sous-groupe (armes, objets, gilets, facecamos...), avec compteurs \"X / X\" sur tous les sous-groupes d'armes. Sur l'onglet Emblèmes, segments blancs pulsants indiquant les emblèmes qu'il est encore possible d'obtenir en terminant la partie en cours, avec info-bulle et clic pour ouvrir le détail. Correction de la condition de déblocage de la chanson \"Subsistence Action\". Corrections de fiabilité : sélection de sauvegarde parfois erronée juste après un rafraîchissement, suppression de toute une plage de sauvegardes, et comparaison avec une sauvegarde devenue introuvable."),
     ("V4.6", "10 septembre 2026", "Affichage des armes/accessoires entièrement revu pour s'adapter à la taille de la fenêtre (fini le défilement horizontal, peu importe le nombre d'entrées dans un groupe). Onglet Stats : le nombre de posters vus affiche désormais \"X / 4\", et \"Objets spéciaux utilisés\" liste maintenant lesquels (Bandana, Camouflage optique) plutôt qu'un simple Oui/Non. Le Costume d'Altaïr est enfin détecté correctement (n'affichait jamais son vrai statut auparavant). Nouvelle icône de l'application."),
@@ -85,8 +86,8 @@ APP_HELP_TEXT = (
     "peux le choisir manuellement (\"Changer de dossier…\"). Sélectionne une "
     "sauvegarde dans la liste à gauche pour voir son détail dans les onglets "
     "à droite.\n\n"
-    "Quelques armes ne sont pas encore identifiées avec certitude (affichées "
-    "\"Arme #NN\") : c'est un travail en cours, basé sur des tests en jeu.\n\n"
+    "Quelques armes ne sont pas encore identifiées avec certitude et ne sont "
+    "donc pas affichées : c'est un travail en cours, basé sur des tests en jeu.\n\n"
     "Dans certains onglets (Objets, OctoCamo, Statuettes, Chansons), certaines "
     "entrées sont cliquables et affichent plus de détails (condition "
     "d'obtention, effet en jeu...)."
@@ -1599,14 +1600,23 @@ class WeaponsPanel(CollectionPanel):
     WEAPON_BUTTON_SIZE = (105, 50)
     ACCESSORY_BUTTON_SIZE = (170, 50)
 
+    # ID jamais affiches ici meme identifies : "Destabil.SOP" (0x44) fait
+    # PLANTER le jeu s'il est equipe (confirme 2 fois via le trainer,
+    # 2026-09-24) - objet interne/debug, pas une vraie arme a collectionner,
+    # ne doit pas apparaitre dans une appli grand public en lecture seule.
+    # Reste visible dans le trainer (recherche), mais verrouille derriere
+    # le mode avance - voir notes.md et GroupedWeaponsTab.DANGEROUS_IDS
+    # dans live_trainer.py.
+    HIDDEN_WEAPON_IDS = {0x44}
+
     def __init__(self):
         super().__init__(
             "ARMES",
             "Blanc = arme acquise. Gris = non acquise. Point rouge = acquise mais "
-            "verrouillée chez Drebin. Quelques armes n'ont pas encore de nom "
-            "identifié (affichées \"Arme #NN\") — travail en cours, voir notes.md. "
-            "Les compteurs \"X / 70\" et \"X / 18\" visent le total canonique du "
-            "jeu, pas le nombre d'entrées déjà identifiées.",
+            "verrouillée chez Drebin. Les armes pas encore identifiées "
+            "individuellement ne sont pas affichées (travail en cours, voir "
+            "notes.md). Les compteurs \"X / 70\" et \"X / 18\" visent le total "
+            "canonique du jeu, pas le nombre d'entrées déjà identifiées.",
             mgs4save.read_weapons,
         )
 
@@ -1617,9 +1627,19 @@ class WeaponsPanel(CollectionPanel):
             if child.widget():
                 child.widget().deleteLater()
 
-        entries = self._reader(slot.mgs4_sav)
+        # Armes jamais identifiees (affichees "Arme #NN") retirees de
+        # l'affichage (2026-09-24, demande explicite de l'utilisateur) -
+        # la liste ne montre plus que les armes confirmees. Meme filtre
+        # applique cote trainer (voir GroupedWeaponsTab dans live_trainer.py).
+        # HIDDEN_WEAPON_IDS retire en plus les entrees dangereuses meme
+        # identifiees (voir commentaire sur HIDDEN_WEAPON_IDS ci-dessus).
+        def _visible(e):
+            return e["identified"] and e["id"] not in self.HIDDEN_WEAPON_IDS
+
+        entries = [e for e in self._reader(slot.mgs4_sav) if _visible(e)]
         if compare_slot is not None:
-            entries = _mark_diff(entries, self._reader(compare_slot.mgs4_sav))
+            compare_entries = [e for e in self._reader(compare_slot.mgs4_sav) if _visible(e)]
+            entries = _mark_diff(entries, compare_entries)
         groups: dict[str, list[dict]] = {}
         for entry in entries:
             groups.setdefault(entry["group"], []).append(entry)
@@ -1753,6 +1773,7 @@ class MainWindow(QMainWindow):
             self.show_stats, self.change_folder, self.refresh_current, self.delete_slot,
             self.import_save_folder, self.compare_with_slot,
         )
+        QShortcut(QKeySequence("F5"), self, activated=self.refresh_current)
         self.stats_panel = StatsPanel()
         self.emblems_panel = EmblemsPanel()
         self.special_items_panel = CollectionPanel(

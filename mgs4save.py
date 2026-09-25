@@ -769,11 +769,31 @@ SPECIAL_CAMO_NAMES = {
 # vraie position de "Gilet - Doré" de nouveau inconnue (voir FACECAMO_NAMES
 # pour la vraie identite de 0x2c).
 VEST_NAMES = {
-    0x2d: "Gilet - Olive",
-    0x2e: "Gilet - Noir",
-    0x2f: "Gilet - Gris",
-    0x30: "Gilet - Bleu marine",
-    0x31: "Gilet - Kaki",
+    # CORRIGE (2026-09-25) : l'ancienne attribution 0x2d/0x2e/0x2f/0x30 =
+    # Olive/Noir/Gris/Bleu marine etait fausse - jamais confirmee par
+    # isolation individuelle a l'origine, juste deduite par ordre suppose.
+    # Test isole propre par l'utilisateur (les 5 forcees a verrouille,
+    # puis debloquees une par une en gardant les precedentes actives -
+    # methode cumulative plutot que "une seule a la fois puis
+    # reverrouiller") : 0x2e=Olive, 0x2f=Noir, 0x30=Gris confirmes.
+    # 0x31 confirme par l'utilisateur = Bleu marine (pas Kaki comme
+    # suppose un temps). Comme Kaki, reste portable meme verrouille
+    # (65535) - meme phenomene que le Masterkey/plusieurs silencieux
+    # (voir DREBIN_LOCK_EXCEPTIONS) : probablement une couleur de depart
+    # que le jeu ne revalide jamais via ce flag.
+    # 0x2d ne fait jamais apparaitre de couleur nouvelle lors des tests
+    # (teste 2 fois) - MAIS ce resultat est indecidable pour une couleur
+    # deja visible en permanence : Kaki (comme Bleu marine) est deja
+    # affichee des le debut du test quel que soit son etat reel, donc
+    # rien ne permet de distinguer "0x2d = Kaki" de "0x2d = role inconnu
+    # sans rapport". Kaki reste donc le candidat le plus probable pour
+    # 0x2d (seul nom du groupe encore sans ID confirme), mais CONFIANCE
+    # BASSE - pas confirmable par cette methode.
+    0x2d: "Gilet - Kaki",
+    0x2e: "Gilet - Olive",
+    0x2f: "Gilet - Noir",
+    0x30: "Gilet - Gris",
+    0x31: "Gilet - Bleu marine",
     # Les 5 suivantes confirmees par le lot NOUVEAU ci-dessus, dans l'ordre
     # exact affiche par le menu (correspond a l'ordre croissant des ID).
     0x32: "Gilet - Vert",
@@ -934,6 +954,33 @@ FACECAMO_NAMES = {
     # nouveau inconnu.
     0x27: "Campbell",
     0x21: "Screaming Beauty",  # confirme par test isole 2026-09-02
+    # Big Boss (0x28) : identite enfin retrouvee (2026-09-25) via le
+    # nouvel onglet "FaceCamo" du trainer - force a 1 en memoire live,
+    # confirme en jeu par l'utilisateur. Resout l'ancien "Vrai ID de Big
+    # Boss de nouveau inconnu" (voir commentaire sur Campbell ci-dessus).
+    0x28: "Big Boss",
+}
+
+# Ordre d'affichage reel du menu "Visage" en jeu (2026-09-25, confirme par
+# 2 captures d'ecran successives de l'utilisateur - NE correspond PAS a
+# l'ordre croissant des ID). "Aucun" (pas de FaceCamo equipe) n'a pas de
+# vrai ID, pas dans ce dict. Meme mecanisme que WEAPON_SORT_ORDER plus
+# bas pour les armes (position de tri explicite plutot que tri par ID).
+FACECAMO_SORT_ORDER: dict[int, int] = {
+    0x1f: 0,   # FaceCamo
+    0x20: 1,   # Jeune Snake
+    0x25: 2,   # Jeune Snake avec bandana
+    0x2a: 3,   # MGS1
+    0x22: 4,   # Laughing Beauty
+    0x23: 5,   # Raging Beauty
+    0x24: 6,   # Crying Beauty
+    0x21: 7,   # Screaming Beauty
+    0x27: 8,   # Campbell
+    0x26: 9,   # Otacon
+    0x2b: 10,  # Raiden - Visiere fermee (= "Raiden A" en jeu)
+    0x2c: 11,  # Raiden - Visiere ouverte (= "Raiden B" en jeu)
+    0x29: 12,  # Drebin
+    0x28: 13,  # Big Boss
 }
 
 # "Doré"/"FaceCamo Doré" (bonus precommande/edition speciale, vus dans le
@@ -1130,6 +1177,11 @@ SONG_NAMES = {
     0x49: "Beyond the Bounds",
     0x4a: "Inori no Uta",
     0x4b: "Bio Hazard",
+    # ID confirme en confiance haute (2026-09-23) : force a 1 en memoire
+    # live (voir live_trainer.py) sur une save fraiche, la chanson apparait
+    # bien dans l'iPod en jeu - le mapping 0x4c est correct. En revanche la
+    # condition d'obtention ci-dessous (SONG_CONDITIONS) est infirmee, voir
+    # ce dict plus bas et notes.md.
     0x4c: "One Night in Neo Kobe City",
     0x4d: "Theme of Solid Snake",
     0x4e: "Zanzibarland Breeze",
@@ -1181,7 +1233,15 @@ SONG_CONDITIONS = {
     "Beyond the Bounds": "Acte 4, hangar à tanks, après que le Mk.III ait déverrouillé la porte vers le champ de neige.",
     "Inori no Uta": "Disponible dans la cuisine du Nomad dès l'Acte 1.",
     "Bio Hazard": "Acte 3, fouiller un membre de la résistance après l'avoir braqué. Effet : effraie les soldats maîtrisés en CQC.",
-    "One Night in Neo Kobe City": "Acte 3, fouiller un SMP après l'avoir braqué. Effet : fait rire les soldats maîtrisés en CQC.",
+    # Condition INFIRMEE (2026-09-23) : l'utilisateur confirme avoir fouille
+    # un SMP apres l'avoir braque sur sa save la plus avancee (action
+    # repetee plusieurs fois), or la chanson reste non obtenue en jeu et en
+    # memoire live (voir live_trainer.py) - ce n'est donc pas (ou pas
+    # seulement) le bon declencheur. Condition ci-dessous gardee affichee
+    # a titre indicatif (source externe non verifiee, comme a l'origine)
+    # mais a corriger des qu'un vrai declencheur est trouve. Vraie
+    # condition encore inconnue - a chercher en jouant.
+    "One Night in Neo Kobe City": "Acte 3, fouiller un SMP après l'avoir braqué (condition non confirmée, probablement fausse - voir commentaire dans le code). Effet : fait rire les soldats maîtrisés en CQC.",
     "Theme of Solid Snake": "Acte 1, après la cinématique de l'attaque de la Beauty and the Beast Unit contre les miliciens.",
     "Zanzibarland Breeze": "Acte 1, zone secrète du bâtiment en ruines, juste avant de descendre vers la sortie.",
     "Metal Gear 20 Years History Part.2": "Acte 4, 2e sous-sol du centre de stockage des ogives nucléaires.",
@@ -1542,26 +1602,53 @@ WEAPON_NAMES = {
     # jusque-la) qui bouge au moment ou l'utilisateur obtient reellement le
     # Masterkey, pas weapon[0x29] qui reste verrouille. Reassigne, voir
     # 0x4a plus bas. Vrai ID de 0x29 de nouveau inconnu.
-    # CONFIANCE BASSE (2026-09-06) : D.E. et DSR-1 obtenus ensemble a
-    # l'epoque (0x08 et 0x29 flushaient en meme temps), impossible de les
-    # isoler individuellement. Attribution par convention a la demande de
-    # l'utilisateur, sans certitude sur qui est qui entre les 2. DSR-1
-    # (0x29) toujours pas isole depuis, reste en confiance basse.
+    # CONFIANCE HAUTE (2026-09-24, corrige la "confiance basse" ci-dessous) :
+    # confirme via le trainer live (weapon_state_rva) en basculant l'etat
+    # de 0x29 et en observant en jeu que c'est bien le DSR-1 qui se
+    # verrouille/deverrouille.
+    #
+    # Historique - CONFIANCE BASSE (2026-09-06) : D.E. et DSR-1 obtenus
+    # ensemble a l'epoque (0x08 et 0x29 flushaient en meme temps),
+    # impossible de les isoler individuellement a ce moment-la.
+    # Attribution par convention a la demande de l'utilisateur.
     0x29: "DSR-1",
     # CONFIANCE HAUTE desormais (2026-09-09) pour le D.E. : test isole
     # propre, seul 0x08 bouge (0x29/DSR-1 reste inchange) parmi les
     # transitions non deja expliquees par ailleurs sur cette fenetre.
     0x08: "D.E.",
+    # Desert Eagle (Canon Long) (0x09) : decouvert via le trainer live
+    # (2026-09-24) - variante canon long du D.E. (0x08), partage le meme
+    # pool de munitions (calibre identique, seule la longueur du canon
+    # change), confirme par correspondance directe.
+    0x09: "Desert Eagle (Canon Long)",
+    # Type 17 (0x10) : decouvert via le trainer live (2026-09-24) -
+    # partage le pool .45 ACP (Operator/1911/Mk.23/M-10/GSR), confirme
+    # par correspondance directe (878).
+    0x10: "Type 17",
+    # Patriot (0x16) : decouvert via le trainer live (2026-09-24) -
+    # confirme par l'utilisateur (arme bonus emblematique de Big Boss,
+    # munitions illimitees, pas de pool de munitions a suivre).
+    0x16: "Patriot",
+    # "Destabil.SOP" (0x44) : decouvert via le trainer live (2026-09-24) -
+    # objet inedit, jamais documente ailleurs a la connaissance de
+    # l'utilisateur. Categorie en jeu "POSER" (objet a poser, pas une
+    # arme), poids 3.0kg. Nom exact tronque a l'ecran ("DESTABIL.SOP") -
+    # confiance basse sur l'orthographe/le nom complet, a confirmer.
+    0x44: "Déstabil. SOP",
     # Confiance haute (2026-09-06) : test isole propre, seul cet ID a
     # bouge dans tout le tableau d'armes.
     0x1b: "AN94",
-    # CONFIANCE BASSE (2026-09-09) : pari de l'utilisateur, PAS un test
-    # isole. 0x1d est un bonus lie a la 2e fin de partie ou plus (identite
-    # inconnue jusqu'ici, confirme comme n'etant PAS le Race Gun), et se
-    # trouve pile au milieu d'un bloc continu de fusils d'assaut (M4 0x18
-    # a XM8 0x1f, sans autre trou) - coherent avec le Tanegashima, arme
-    # bonus de completion connue du jeu. A confirmer par un test isole si
-    # l'occasion se presente.
+    # CONFIANCE HAUTE (2026-09-24, corrige le "confiance basse" ci-dessous) :
+    # confirme via le trainer live (voir live_trainer.py, weapon_state_rva)
+    # en basculant l'etat de 0x1d et en observant en jeu que c'est bien le
+    # Tanegashima qui se verrouille/deverrouille.
+    #
+    # Historique - CONFIANCE BASSE (2026-09-09) : pari de l'utilisateur,
+    # PAS un test isole a l'epoque. 0x1d est un bonus lie a la 2e fin de
+    # partie ou plus (identite inconnue jusqu'ici, confirme comme n'etant
+    # PAS le Race Gun), et se trouve pile au milieu d'un bloc continu de
+    # fusils d'assaut (M4 0x18 a XM8 0x1f, sans autre trou) - coherent
+    # avec le Tanegashima, arme bonus de completion connue du jeu.
     0x1d: "Tanegashima",
     0x1e: "MK.17",
     # Confiance haute : test isole propre en 2 etapes (2026-09-05) - save
@@ -1581,23 +1668,39 @@ WEAPON_NAMES = {
     # correspond au champ stats "emotion_magazine_pages" deja suivi
     # separement de "playboy_pages".
     0x46: "Magazine Émotion",
-    # CONFIANCE BASSE : Mk.2 Pistol, Operator, 1911 Modifie, Thor .45-70 et
-    # le silencieux de l'Operator ("SIL. (OP)") sont tous donnes ensemble
-    # par Otacon, impossible de les isoler individuellement (confirme par
-    # l'utilisateur - evenement scenaristique unique, 5 ID qui flushent
-    # d'un coup : 0x02, 0x03, 0x0a, 0x0b, 0x4d). Attribution par
-    # convention (2026-09-05, a la demande de l'utilisateur) dans l'ordre
-    # d'apparition par defaut du jeu (Mk.2 Pistol en tout premier) plutot
-    # que par ID croissant brut : 0x02=Mk.2 Pistol, 0x03=Operator,
-    # 0x0a=1911 Modifie, 0x0b=Thor .45-70, 0x4d=Silencieux Operator.
-    # Aucune certitude reelle sur qui est qui au sein de ce lot.
+    # CONFIANCE HAUTE pour 0x0a/0x0b (2026-09-24, corrige la convention
+    # "confiance basse" ci-dessous) : le trainer live a revele que le
+    # tableau d'etat des armes en memoire suit une formule lineaire
+    # stricte RVA(id) = base + id*0x50 (voir live_trainer.py,
+    # CONFIRMED_WEAPON_RVAS), verifiee sur 9 armes deja confirmees
+    # independamment. Cette formule predisait que 0x0a et 0x0b etaient
+    # INVERSES par rapport a l'attribution par convention ci-dessous.
+    # Double confirmation en jeu par l'utilisateur : desactiver l'adresse
+    # predite pour 0x0a verrouille bien le Thor .45-70, et celle predite
+    # pour 0x0b verrouille bien le 1911 Modifie. Voir notes.md.
+    #
+    # CONFIANCE HAUTE pour 0x02 et 0x03 (2026-09-24) : confirmes via le
+    # trainer live (weapon_state_rva) en basculant l'etat de chacun et en
+    # observant en jeu que c'est bien le Mk.2 Pistol (0x02) puis
+    # l'Operator (0x03) qui se verrouille/deverrouille.
+    #
+    # Lot Otacon desormais entierement resolu (2026-09-24) : le
+    # Silencieux Operator (0x4d, voir plus bas dans ce dictionnaire) est
+    # le dernier morceau confirme, en forcant l'etat a 0 (comme pour le
+    # Masterkey - ces accessoires n'ont pas de palier "verrouille chez
+    # Drebin" intermediaire, 1 et 2 se comportent pareil, seul 0 a un
+    # effet visible) : le silencieux devient bien indisponible en jeu.
     0x02: "Mk.2 Pistol",
     0x03: "Operator",
-    0x0a: "1911 Modifié",
-    0x0b: "Thor .45-70",
+    0x0a: "Thor .45-70",
+    0x0b: "1911 Modifié",
     # RPG-7 de base : toujours obtenu sur toutes les parties (y compris
     # terminees) - confiance haute.
     0x32: "RPG-7",
+    # CONFIANCE HAUTE (2026-09-24) : confirme via le trainer live en
+    # forcant l'etat a 0 (voir commentaire plus haut sur le lot Otacon) -
+    # le silencieux devient bien indisponible en jeu. Dernier morceau du
+    # lot Otacon (0x02/0x03/0x0a/0x0b/0x4d) a etre isole individuellement.
     0x4d: "Silencieux Operator",
     # Confirmes par tests isoles (partie fraiche).
     # Confiance haute (2026-09-05) : test isole propre, save avec
@@ -1643,13 +1746,18 @@ WEAPON_NAMES = {
     # bouge dans tout le tableau d'armes.
     0x24: "Double canon",
     0x42: "C4",
-    # CONFIANCE BASSE (2026-09-09) : attribution par convention/deduction,
-    # PAS un test isole. 0x43 est immediatement adjacent au bloc continu
-    # d'explosifs/grenades/lance-roquettes 0x2e-0x42 (Claymore, Mine a gaz
-    # somnifere, C4, puis ce slot juste apres) - identite plausible mais
-    # non confirmee par une transition observee. Ancien nom faux herite
-    # de la table Cheat Engine d'origine, jamais teste isolement (voir
-    # 0x30 plus haut pour l'historique complet du FIM-92A).
+    # CONFIANCE HAUTE (2026-09-24, corrige la "confiance basse" ci-dessous) :
+    # confirme via le trainer live (weapon_state_rva) en basculant l'etat
+    # de 0x43 et en observant en jeu que c'est bien le Sachet a gaz
+    # somnifere qui se verrouille/deverrouille.
+    #
+    # Historique - CONFIANCE BASSE (2026-09-09) : attribution par
+    # convention/deduction, PAS un test isole a l'epoque. 0x43 est
+    # immediatement adjacent au bloc continu d'explosifs/grenades/
+    # lance-roquettes 0x2e-0x42 (Claymore, Mine a gaz somnifere, C4, puis
+    # ce slot juste apres) - identite plausible mais pas encore confirmee
+    # a l'epoque (voir 0x30 plus haut pour l'historique complet du
+    # FIM-92A).
     0x43: "Sachet à gaz somnifère",
     0x1a: "G3A3",
     # Confiance haute (2026-09-09) : test isole propre, seul cet ID a
@@ -1671,12 +1779,16 @@ WEAPON_NAMES = {
     0x25: "M870 Modifié",
     0x57: "Lumière Fusil (M4)",  # nom exact confirme par capture d'ecran (2026-09-02)
     0x4f: "Silencieux 1911",
-    # CONFIANCE BASSE (2026-09-09) : pari de l'utilisateur, PAS un test
-    # isole. 0x4e est un bonus lie a la 1ere fin de partie (identite
-    # inconnue jusqu'ici, ni Race Gun ni 1911 Modifie), pile entre le
-    # Silencieux Operator (0x4d) et le Silencieux 1911 (0x4f) dans le
-    # bloc continu d'accessoires 0x4a-0x5b - coherent avec un silencieux
-    # supplementaire pour une arme de poing pas encore couverte.
+    # CONFIANCE HAUTE (2026-09-24, corrige la "confiance basse" ci-dessous) :
+    # confirme via le trainer live - tous les accessoires forces a 0 puis
+    # rachetes un par un chez Drebin par l'utilisateur (voir notes.md),
+    # seul 0x4e est repasse a 2 au moment de racheter le Silencieux Mk.23.
+    #
+    # Historique - CONFIANCE BASSE (2026-09-09) : pari de l'utilisateur,
+    # PAS un test isole a l'epoque. 0x4e est un bonus lie a la 1ere fin de
+    # partie (identite inconnue jusque-la, ni Race Gun ni 1911 Modifie),
+    # pile entre le Silencieux Operator (0x4d) et le Silencieux 1911
+    # (0x4f) dans le bloc continu d'accessoires 0x4a-0x5b.
     0x4e: "Silencieux Mk.23",
     # Confiance haute (2026-09-05) : test isole propre, seul cet ID a
     # bouge dans tout le tableau d'armes.
@@ -1734,12 +1846,20 @@ WEAPON_NAMES = {
     # bouge dans tout le tableau d'armes.
     0x2b: "Mosin-Nagant",
     # Confiance haute (2026-09-05) : meme test isole que M14EBR ci-dessus.
+    # Reconfirme independamment le 2026-09-24 : parti de tous les
+    # accessoires forces a 0 (voir notes.md), l'utilisateur a rachete la
+    # Lumiere pour pistolet chez Drebin - seul 0x59 est repasse a 2.
     0x59: "Lumière pour pistolet",
     # Confiance haute (2026-09-06) : test isole propre sur une partie
     # differente, seul cet ID a bouge dans tout le tableau d'armes au
     # moment ou l'utilisateur obtient le Masterkey. Corrige l'ancienne
     # etiquette "DSR-1" (jamais confirmee individuellement), vrai ID du
     # DSR-1 de nouveau inconnu.
+    # Reconfirme independamment le 2026-09-24 via weapon_state_rva : forcer
+    # l'etat a 0 (Non possedee) rend bien le Masterkey indisponible/non
+    # equipable en jeu (1 et 2 se comportent pareil - pas de palier
+    # "verrouille chez Drebin" pour cette arme trouvee via declencheur
+    # scenaristique, contrairement aux armes achetees).
     0x4a: "Masterkey",
     # Lot de 4 armes obtenues ensemble, departagees via le tableau de
     # munitions 0x352 (methode desormais suspecte, voir plus bas) : les 4
@@ -1830,7 +1950,7 @@ WEAPON_CATEGORIES = {
     0x25: "Fusil à pompe",  # M870 Modifie
     0x1a: "Fusil d'assaut",  # G3A3
     0x1c: "Fusil d'assaut",  # FAL
-    0x1d: "Fusil d'assaut",  # Tanegashima (confiance basse)
+    0x1d: "Fusil d'assaut",  # Tanegashima
     0x1b: "Fusil d'assaut",  # AN94
     0x32: "Lance-roquette",
     0x36: "Grenade",
@@ -1845,7 +1965,7 @@ WEAPON_CATEGORIES = {
     0x40: "Explosif",  # Claymore
     0x41: "Explosif",  # Mine a gaz somnifere
     0x42: "Explosif",  # C4
-    0x43: "Explosif",  # Sachet a gaz somnifere (confiance basse)
+    0x43: "Explosif",  # Sachet a gaz somnifere
     0x54: "Accessoire",  # Lunette de fusil
     0x45: "Magazine",  # Magazine Playboy
     0x46: "Magazine",  # Magazine Emotion
@@ -1858,8 +1978,8 @@ WEAPON_CATEGORIES = {
     0x57: "Accessoire",  # Lumiere pour arme d'epaule
     0x4f: "Accessoire",  # Silencieux 1911
     0x4e: "Accessoire",  # Silencieux Mk.23 (confiance basse)
-    0x0a: "Arme de poing",  # 1911 Modifie
-    0x0b: "Arme de poing",  # Thor .45-70 - reclasse avec les pistolets (liste utilisateur, 2026-09-06)
+    0x0a: "Arme de poing",  # Thor .45-70 - reclasse avec les pistolets (liste utilisateur, 2026-09-06)
+    0x0b: "Arme de poing",  # 1911 Modifie
     0x5a: "Accessoire",  # Poignee avant A.
     0x17: "Pistolet-mitrailleur",  # Vz-83
     0x15: "Pistolet-mitrailleur",  # PP-19 Bizon
@@ -1873,7 +1993,10 @@ WEAPON_CATEGORIES = {
     0x04: "Arme de poing",  # Mk.23
     0x05: "Arme de poing",  # PMM (Makarov PMM)
     0x08: "Arme de poing",  # D.E.
-    0x29: "Fusil Sniper",  # DSR-1 (confiance basse)
+    0x09: "Arme de poing",  # Desert Eagle (Canon Long)
+    0x10: "Arme de poing",  # Type 17
+    0x16: "Pistolet-mitrailleur",  # Patriot
+    0x29: "Fusil Sniper",  # DSR-1
     0x56: "Accessoire",  # Visee point rouge (MP7)
     0x55: "Accessoire",  # Visee point rouge (M4)
     0x58: "Accessoire",  # Visee laser (M4)
@@ -1891,6 +2014,7 @@ WEAPON_CATEGORIES = {
     0x20: "Mitrailleuse",  # Mk.46 MOD1
     0x14: "Pistolet-mitrailleur",  # P90
     0x3e: "Autre",  # Chargeur (objet de diversion, pas une arme)
+    0x44: "Autre",  # Destabil.SOP (objet "POSER", pas une arme)
     0x23: "Mitrailleuse",  # M60E4
     0x4b: "Accessoire",  # XM320 (lance-grenades sous-canon, accessoire pas arme autonome)
     0x33: "Lance-roquette",  # M72A3 (LAW)
@@ -1965,6 +2089,9 @@ def read_weapon_states(path: str) -> dict[int, int]:
 STRUCTURAL_WEAPON_IDS = {0x5c, 0x5d, 0x5e}
 # - 0x00/0x13 (objets generaux) : valent 0 (jamais 65535) sur absolument
 #   toutes les saves disponibles, y compris la toute premiere du jeu.
+#   0x00 reconfirme (2026-09-23) : force a 1 en memoire live (voir
+#   live_trainer.py), aucun effet visible en jeu (inventaire, HUD, menu
+#   pause) - pas un vrai objet.
 STRUCTURAL_ITEM_IDS = {0x00, 0x13}
 
 
@@ -1973,11 +2100,21 @@ STRUCTURAL_ITEM_IDS = {0x00, 0x13}
 # plusieurs tests) : le Silencieux M4 reste bloque a 1 sur certaines
 # parties tout en etant deja monte et fonctionnel sur son M4 en jeu -
 # donc le point rouge "verrouille" serait un faux positif pour cet ID.
-# Silencieux Mk.23 (0x4e, confiance basse sur l'identite elle-meme -
-# voir WEAPON_NAMES) ajoute par precaution/analogie le 2026-09-09, meme
-# situation potentielle qu'avec le Silencieux M4, mais PAS confirme par
-# un test dedie pour cet ID precis.
-DREBIN_LOCK_EXCEPTIONS = {0x52, 0x4e}  # Silencieux M4, Silencieux Mk.23
+# Silencieux Mk.23 (0x4e, identite desormais confiance haute - voir
+# WEAPON_NAMES) ajoute par precaution/analogie le 2026-09-09, meme
+# situation potentielle qu'avec le Silencieux M4 - toujours pas confirme
+# par un test dedie sur ce point precis (le comportement "faux
+# verrouille" specifiquement), meme si l'identite elle-meme l'est
+# desormais.
+# 2e confirmation directe le 2026-09-24 : Silencieux Operator (0x4d) lit
+# etat=1 (weapon_state_rva) alors que l'utilisateur en possede et en
+# utilise activement une vingtaine (HUD en jeu "SIL 26"/"SIL 25" pendant
+# le tir) - meme phenomene que le Silencieux M4, pas une preuve que l'ID
+# 0x4d est incorrect. Renforce l'hypothese que ce "faux verrouille" est
+# un comportement general des accessoires a durabilite/stock consommable
+# (silencieux qui s'usent et se remplacent automatiquement), pas un cas
+# isole du M4.
+DREBIN_LOCK_EXCEPTIONS = {0x52, 0x4e, 0x4d}  # Silencieux M4, Mk.23, Operator
 
 
 def read_weapons(path: str) -> list[dict]:
