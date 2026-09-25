@@ -50,7 +50,17 @@ Voir [`notes.md`](notes.md#stats-cibles).
 `gui_app.py` (PySide6) : détection automatique du dossier de sauvegarde,
 liste des slots à gauche (miniature, difficulté, temps de jeu, Drebin),
 détail des stats à droite au clic. Bouton "Changer de dossier…" en secours
-si la détection automatique échoue (bibliothèque Steam non standard, etc.).
+si la détection automatique échoue (bibliothèque Steam non standard, etc.),
+bouton/raccourci **F5** pour actualiser la liste sans relancer l'appli.
+
+Onglets de collection (Armes, Objets, OctoCamo, Tenues, Statuettes,
+Chansons, Emblèmes) : identification individuelle de chaque entrée
+(nom réel plutôt qu'un ID brut) via des tests isolés en jeu documentés au
+cas par cas dans `notes.md` — armes/accessoires, FaceCamos, couleurs de
+Gilet, motifs OctoCamo (hors "Camo Cadavre" et quelques motifs bonus,
+jamais localisés malgré de nombreuses tentatives, voir `notes.md`). Les
+armes jamais identifiées avec certitude ne sont pas affichées plutôt que
+de montrer un ID brut.
 
 ```
 python gui_app.py
