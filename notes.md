@@ -3682,3 +3682,108 @@ Deux ajustements dans `GroupedWeaponsTab`/`TableTab` (`live_trainer.py`) :
   cas-la. Idempotent (une fois a 10, le test `== 65535` ne redeclenche
   plus rien) et sans risque pour un stock deja reel (seule la valeur
   exacte 65535 est concernee).
+
+### Controle de la vitesse du jeu (ralenti/accelere) via injection DLL (2026-09-26)
+
+Demande utilisateur : un curseur dans l'onglet "Etat de jeu" du trainer,
+centre sur la vitesse normale, glissable vers la gauche (ralenti) ou la
+droite (accelere), plus une case Pause independante.
+
+**Pause** : trivial, pas d'injection necessaire - `NtSuspendProcess`/
+`NtResumeProcess` (ntdll) deja disponibles, juste cables a une case a
+cocher (`SpeedController.set_paused`, handle temporaire dedie avec
+`PROCESS_SUSPEND_RESUME`, ferme immediatement apres usage).
+
+**Vitesse (ralenti fluide ET accelere)** : premiere fois dans ce projet
+qu'une technique d'**injection de code** est utilisee - jusque-la, tout
+reposait sur `ReadProcessMemory`/`WriteProcessMemory` externes, jamais
+sur du code executant a l'interieur du process jeu. Technique choisie :
+"speedhack" classique (proche de ce que fait Cheat Engine), voir
+`MGS4-Trainer/native/speedhack.c` (nouveau depot du trainer) :
+- Injection par la methode standard `CreateRemoteThread` +
+  `LoadLibraryA` (handle temporaire avec `PROCESS_CREATE_THREAD`, droit
+  absent du handle habituel utilise pour la lecture/ecriture memoire).
+- La DLL patch l'IAT (Import Address Table) pour rediriger les
+  fonctions Windows de mesure du temps vers des versions "hookees" qui
+  renvoient un temps virtuel avancant plus ou moins vite que le temps
+  reel, selon un multiplicateur lu en continu dans une memoire partagee
+  nommee (`Local\MGS4TrainerSpeedHack`) que le trainer Python met a jour
+  a chaque mouvement du curseur.
+- Compilateur utilise : `x86_64-w64-mingw32-gcc` (MSYS2, deja installe
+  sur la machine sous `D:\Documents\GitHub\msys2`) - **necessite d'avoir
+  `mingw64/bin` dans le PATH**, sinon `cc1.exe` echoue silencieusement
+  (exit 1, aucune sortie, tres trompeur - perdu du temps dessus avant de
+  trouver la cause : DLL runtime du compilateur introuvables sans ce
+  PATH). La DLL compilee ne depend que de `kernel32.dll`/`msvcrt.dll`
+  (verifie via `objdump -p`), donc redistribuable sans installer MSYS2
+  chez l'utilisateur final.
+
+**Chemin de decouverte (plusieurs hypotheses testees, avec redemarrage
+du jeu obligatoire a chaque nouvelle version de la DLL - le module deja
+charge dans un process ne se remplace pas a chaud, meme en ecrasant le
+fichier sur disque) :**
+1. Hook `QueryPerformanceCounter` (kernel32) seul, limite au module
+   principal (l'exe) : patch confirme pose, **aucun effet visible en
+   jeu**.
+2. Ajout du hook `timeGetTime` (winmm) en parallele, toujours limite au
+   module principal : les deux patches confirmes poses (diagnostic
+   bitmask dans la memoire partagee), **toujours aucun effet**.
+3. Extension a **tous les modules charges du process** (pas seulement
+   l'exe - hypothese que le vrai appel de timing vient d'une DLL du jeu
+   separee) via `CreateToolhelp32Snapshot`/`Module32First`/`Module32Next`
+   sur le process courant : diagnostic lu cote Python juste apres
+   l'injection montrait 0 hook pose, ce qui semblait indiquer un echec
+   de cette methode.
+4. Fausse piste explorée sur la base de ce diagnostic a 0 : ajout d'une
+   boucle de nouvelle tentative pour `ERROR_BAD_LENGTH` (echec transitoire
+   documente de `CreateToolhelp32Snapshot` avec `SNAPMODULE`) - toujours
+   0 au diagnostic Python.
+5. Re-ecrit avec `K32EnumProcessModules` (psapi, mais expose directement
+   par `kernel32.dll` - pas de nouvelle dependance) a la place de
+   Toolhelp32, en soupconnant un bug de cette derniere - jamais teste en
+   jeu : au moment de demander un nouveau redemarrage pour ce test,
+   **l'utilisateur a signale que le ralenti fonctionnait deja** (et
+   fonctionnait aussi lors du test precedent, l'etape 3/4).
+6. **Cause reelle identifiee a retardement** : ce n'etait pas un bug de
+   Toolhelp32 (etape 3/4 fonctionnait bel et bien), juste une **course de
+   vitesse dans le diagnostic Python** - `ensure_injected()` ne verifiait
+   que la creation de la memoire partagee, pas la fin reelle du patching
+   (qui prend un peu de temps de plus, surtout la variante qui scanne
+   tous les modules) : le diagnostic etait interroge avant que
+   `patch_import_everywhere` ait fini d'ecrire son bitmask, d'ou des
+   lectures a 0 trompeuses alors que le hook fonctionnait deja readlly.
+   Confirme par une lecture differee (quelques secondes plus tard) :
+   `patched_mask=15` (les 4 candidats testes trouves et patches),
+   `qpc_hit_count=18`, `timegettime_hit_count=3` - **plusieurs sites**
+   par fonction, cofirmant qu'elles sont bien appelees depuis plusieurs
+   DLL differentes du jeu, pas seulement l'exe principal (explique
+   pourquoi l'etape 1/2, limitee au module principal, n'avait aucun
+   effet). Source ré-alignee sur la version Toolhelp32+retry (celle
+   reellement testee et confirmee), la version K32EnumProcessModules
+   jamais deployee abandonnee.
+7. `ensure_injected()` corrige : attend desormais que `patched_mask()`
+   devienne non-nul (ou un court delai d'attente) avant de considerer
+   l'injection prete, pour eviter de refaire confiance a un diagnostic
+   premature a l'avenir.
+
+**Confirme fonctionnel en jeu par l'utilisateur (2026-09-26)** : ralenti
+a 30% et acceleration a 200% toutes deux visibles et confirmees oralement
+("oui*" puis "oui"), retour a la vitesse normale confirme aussi.
+
+**Curseur UI** (`VitalsTab`, `live_trainer.py`) : mapping asymetrique
+centre sur 0 = vitesse normale (1.0x) - moitie gauche du curseur
+(-100..0) va de 10% a 100%, moitie droite (0..100) de 100% a 300%. Le
+curseur reste visuellement symetrique (demande explicite) meme si la
+plage de vitesses couverte ne l'est pas. Injection faite paresseusement
+(seulement au premier mouvement reel du curseur, pas a la connexion) -
+inutile de prendre le risque d'injecter tant que l'utilisateur ne
+touche pas au curseur.
+
+**Limite connue** : la technique de patch IAT ne peut hooker qu'un appel
+fait via l'IAT d'un module (import "normal") - un appel resolu une fois
+et mis en cache par un pointeur brut (au lieu d'etre appele via l'IAT a
+chaque fois), ou un appel direct par instruction machine (RDTSC), ne
+serait pas intercepte. S'est avere non-necessaire d'aller jusque-la ici
+(le patch IAT simple a suffi une fois etendu a tous les modules), mais
+noter pour une eventuelle prochaine mise a jour du jeu qui pourrait
+changer ce comportement.
